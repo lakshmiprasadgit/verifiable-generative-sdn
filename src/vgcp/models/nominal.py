@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from vgcp.action import ControlAction
-from vgcp.errors import ConfigError, is_real
+from vgcp.errors import ConfigError, is_finite_real
 from vgcp.models.interfaces import Prediction
 from vgcp.state import Demand, Measurement, NetworkState
 from vgcp.topology import Topology
@@ -58,7 +58,7 @@ class NominalModelParams:
             if key not in raw:
                 raise ConfigError(f"{ctx}: missing '{key}'")
             v = raw[key]
-            ok = is_real(v) and math.isfinite(v) and v <= hi and (v > lo if lo_open else v >= lo)
+            ok = is_finite_real(v) and v <= hi and (v > lo if lo_open else v >= lo)
             if not ok:
                 raise ConfigError(f"{ctx}.{key}: invalid value {v!r}")
             return float(v)
@@ -67,7 +67,7 @@ class NominalModelParams:
         if not isinstance(sizes, Mapping) or set(sizes) != set(slice_names):
             raise ConfigError(f"{ctx}.mean_packet_size_bytes must list exactly {list(slice_names)}")
         for s, v in sizes.items():
-            if not (is_real(v) and math.isfinite(v) and v > 0):
+            if not (is_finite_real(v) and v > 0):
                 raise ConfigError(f"{ctx}.mean_packet_size_bytes.{s}: must be > 0")
         max_u = num("max_valid_utilization", 0.0, 1.0, lo_open=True)
         if max_u >= 1.0:

@@ -12,7 +12,6 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -21,7 +20,7 @@ import yaml
 
 from vgcp.action import ActionSchema, ControlAction, SliceSpec
 from vgcp.constraints import ConstraintConfig
-from vgcp.errors import ConfigError, InvalidActionError, is_real
+from vgcp.errors import ConfigError, InvalidActionError, is_finite_real
 from vgcp.models.nominal import NominalModelParams
 from vgcp.signals import action_signal_names
 from vgcp.state import DEMAND_FAMILIES, STATE_FAMILIES, ObservationSchema
@@ -97,7 +96,7 @@ def _get(m: Any, key: str, ctx: str) -> Any:
 
 
 def _num(x: Any, ctx: str, *, lo: float | None = None, lo_open: bool = False) -> float:
-    if not is_real(x) or not math.isfinite(x):
+    if not is_finite_real(x):
         raise ConfigError(f"{ctx}: expected a finite number, got {x!r}")
     if lo is not None and (x <= lo if lo_open else x < lo):
         raise ConfigError(f"{ctx}: must be {'>' if lo_open else '>='} {lo}, got {x}")

@@ -146,7 +146,7 @@ Checks, in order, each `PASS` / `FAIL` / `UNKNOWN`:
    Eq 14 evaluated on the projected trajectory (ŝ_t = s_t, â_t = a_t,
    â_{t+k} = π₀(ŝ_{t+k})).
 
-**Decision.** The action is accepted iff every check is `PASS`. If a
+**Decision.** The action is accepted iff every check is `PASS`, except that a check disabled by configuration (only `hard_constraints_rollout`, D3) is reported as `NOT_APPLICABLE` rather than `PASS` (audit L1). If a
 prerequisite (1–3) fails, the later checks are recorded as `UNKNOWN`
 ("skipped"), never `PASS`. Any exception inside the shield is recorded as
 `internal_error: UNKNOWN`, so an exception is a rejection. The `Certificate`

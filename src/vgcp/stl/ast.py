@@ -18,10 +18,9 @@ Time bounds a, b are non-negative integers counted in control slots.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
-from vgcp.errors import is_real
+from vgcp.errors import is_finite_real
 
 
 class Formula:
@@ -52,7 +51,7 @@ class Predicate(Formula):
     def __post_init__(self) -> None:
         if self.op not in ("<=", ">="):
             raise ValueError(f"predicate operator must be '<=' or '>=', got {self.op!r}")
-        if not is_real(self.threshold) or not math.isfinite(self.threshold):
+        if not is_finite_real(self.threshold):
             raise ValueError(f"predicate threshold must be a finite number, got {self.threshold!r}")
         if not isinstance(self.signal, str) or not self.signal:
             raise ValueError("predicate signal name must be a non-empty string")

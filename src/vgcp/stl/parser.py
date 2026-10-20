@@ -173,11 +173,17 @@ class _Parser:
             num = self.take()
             if num.kind != "num":
                 raise ParseError(f"expected a number at position {num.pos}, found {num.text or 'end'!r}")
-            return Predicate(tok.text, op.text, float(num.text))
+            value = float(num.text)
+            if value in (float("inf"), float("-inf")):
+                raise ParseError(f"threshold {num.text!r} at position {num.pos} must be a finite number")
+            return Predicate(tok.text, op.text, value)
         raise ParseError(f"unexpected {tok.text or 'end'!r} at position {tok.pos}")
 
 
 def parse(text: str) -> Formula:
     if not isinstance(text, str) or not text.strip():
         raise ParseError("formula text must be a non-empty string")
-    return _Parser(text).parse()
+    try:
+        return _Parser(text).parse()
+    except RecursionError:
+        raise ParseError("formula is too deeply nested") from None

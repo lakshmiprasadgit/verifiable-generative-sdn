@@ -19,6 +19,17 @@ def is_real(x: Any) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
 
+def is_finite_real(x: Any) -> bool:
+    """True for a finite int/float (not bool). Never raises: an int too large to
+    convert to float counts as non-finite instead of raising OverflowError."""
+    if not is_real(x):
+        return False
+    try:
+        return math.isfinite(x)
+    except OverflowError:
+        return False
+
+
 def json_safe(x: Any) -> Any:
     """Convert NaN/inf floats (not valid JSON) into None / "inf" / "-inf" recursively."""
     if isinstance(x, float):

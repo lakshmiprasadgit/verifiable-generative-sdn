@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from vgcp.action import ControlAction, SliceSpec
-from vgcp.errors import ConfigError, is_real
+from vgcp.errors import ConfigError, is_finite_real
 from vgcp.state import NetworkState
 from vgcp.topology import Topology
 
@@ -72,7 +72,7 @@ def _get(m: Mapping[str, Any], key: str, ctx: str) -> Any:
 
 
 def _num(x: Any, ctx: str, lo: float | None = None, hi: float | None = None) -> float:
-    if not is_real(x) or not math.isfinite(x):
+    if not is_finite_real(x):
         raise ConfigError(f"{ctx}: expected a finite number, got {x!r}")
     if (lo is not None and x < lo) or (hi is not None and x > hi):
         raise ConfigError(f"{ctx}: {x} outside [{lo}, {hi}]")

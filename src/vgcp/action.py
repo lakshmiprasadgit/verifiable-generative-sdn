@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
 
-from vgcp.errors import InvalidActionError, is_real
+from vgcp.errors import InvalidActionError, is_finite_real, is_real
 
 _FIELDS = ("path", "rate_budget_mbps", "admission_limit", "link_power")
 
@@ -136,7 +136,7 @@ class ActionSchema:
 
             budget = action.rate_budget_mbps[name]
             lo, hi = spec.rate_budget_mbps
-            if not is_real(budget) or not math.isfinite(budget):
+            if not is_finite_real(budget):
                 errors.append(f"rate_budget_mbps.{name}: not a finite number ({budget!r})")
             elif not lo <= budget <= hi:
                 errors.append(f"rate_budget_mbps.{name}: {budget} outside [{lo}, {hi}]")
@@ -198,7 +198,7 @@ class ActionSchema:
         n = 3 * len(self.slice_names) + len(self.power_links)
         if len(vec) != n:
             raise InvalidActionError(f"expected {n} components, got {len(vec)}")
-        if not all(is_real(v) and math.isfinite(v) for v in vec):
+        if not all(is_finite_real(v) for v in vec):
             raise InvalidActionError("vector has non-finite or non-numeric components")
 
         def integral(v: float, what: str) -> int:

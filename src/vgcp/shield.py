@@ -15,7 +15,8 @@ shield runs explicit checks and accepts only if every check PASSES:
                           (stricter than Eq 17; configurable)
   intent:<name>           rho_phi(s_t, a_t) >= rho_min for each phi in Phi  Eqs 14, 17
 
-Each check is PASS, FAIL or UNKNOWN. UNKNOWN (missing/stale data, skipped
+Each check is PASS, FAIL, UNKNOWN, or NOT_APPLICABLE (only for a check that the
+configuration disables, so a certificate never reports it as passed). UNKNOWN (missing/stale data, skipped
 because a prerequisite failed, model out of domain, internal error) is never
 treated as safe: the action is rejected.
 
@@ -36,7 +37,7 @@ from typing import Any, Sequence
 from vgcp.action import ControlAction, action_fingerprint
 from vgcp.config import Intent, ProjectConfig
 from vgcp.constraints import ConstraintVector, HardConstraints
-from vgcp.errors import ConfigError, is_real, json_safe
+from vgcp.errors import ConfigError, is_finite_real, is_real, json_safe
 from vgcp.models import (
     AnalyticNominalModel,
     ConservativeConstantForecast,
@@ -54,6 +55,10 @@ class CheckStatus(str, Enum):
     PASS = "pass"
     FAIL = "fail"
     UNKNOWN = "unknown"
+    NOT_APPLICABLE = "not_applicable"  # check disabled by configuration; never emitted otherwise
+
+
+_ACCEPTABLE = (CheckStatus.PASS, CheckStatus.NOT_APPLICABLE)
 
 
 @dataclass(frozen=True)
@@ -103,7 +108,7 @@ class Certificate:
         raise KeyError(name)
 
     def failed(self) -> list[CheckResult]:
-        return [c for c in self.checks if c.status is not CheckStatus.PASS]
+        return [c for c in self.checks if c.status not in _ACCEPTABLE]
 
     def to_dict(self) -> dict[str, Any]:
         return json_safe({
@@ -220,7 +225,7 @@ class VerificationShield:
             in_domain = self._run_checks(state, demand, action, now_s, checks, robustness, c_now)
         except Exception as exc:  # an exception must never turn into acceptance
             checks.append(CheckResult("internal_error", CheckStatus.UNKNOWN, repr(exc)))
-        accepted = bool(checks) and all(c.status is CheckStatus.PASS for c in checks)
+        accepted = bool(checks) and all(c.status in _ACCEPTABLE for c in checks)
         return Certificate(
             accepted=accepted, t=t, checks=tuple(checks), robustness=robustness,
             constraints_now=c_now, rho_min={it.name: it.rho_min for it in self.intents},
@@ -289,7 +294,7 @@ class VerificationShield:
         ))
 
         if not self.cfg.shield.check_constraints_along_rollout:
-            checks.append(CheckResult("hard_constraints_rollout", CheckStatus.PASS,
+            checks.append(CheckResult("hard_constraints_rollout", CheckStatus.NOT_APPLICABLE,
                                       "disabled in configuration (paper Eq 17 checks k = 0 only)"))
         elif bad_fallback:
             checks.append(CheckResult("hard_constraints_rollout", CheckStatus.UNKNOWN,
@@ -326,7 +331,7 @@ class VerificationShield:
                       keys: Sequence[str], now_s: float) -> CheckResult:
         if not isinstance(obs, cls):
             return CheckResult(name, CheckStatus.UNKNOWN, f"expected {cls.__name__}, got {type(obs).__name__}")
-        if not isinstance(now_s, (int, float)) or isinstance(now_s, bool) or not math.isfinite(now_s):
+        if not is_finite_real(now_s):
             return CheckResult(name, CheckStatus.UNKNOWN, f"invalid current time {now_s!r}")
         statuses = schema.check(obs, keys, now_s=now_s, max_age_s=self.cfg.shield.max_staleness_s)
         bad = {k: s.value for k, s in statuses.items() if s is not MetricStatus.OK}

@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from typing import Mapping, Sequence
 
-from vgcp.errors import is_real
+from vgcp.errors import is_finite_real, is_real
 
 
 class UnknownSignalError(KeyError):
@@ -37,7 +37,8 @@ class Trace:
                     out.append(math.nan)
                 elif not is_real(v):
                     raise TypeError(f"signal {name}[{k}]: not a number ({v!r})")
-                elif math.isinf(v):
+                elif not is_finite_real(v) and not (isinstance(v, float) and math.isnan(v)):
+                    # +/-inf, or an int too large for a float
                     self.invalid.add((name, k))
                     out.append(math.nan)
                 else:

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Mapping, Sequence
 
-from vgcp.errors import ConfigError, is_real
+from vgcp.errors import ConfigError, is_finite_real, is_real
 
 # family -> (index set, unit). Index sets: "link", "slice", "switch", "global".
 # Paper Sec 2.1 lists: link utilizations; per-slice queue occupancies; per-flow
@@ -158,7 +158,7 @@ class ObservationSchema:
                 status = MetricStatus.MISSING
             elif not is_real(m.value):
                 status = MetricStatus.NOT_NUMERIC
-            elif not math.isfinite(m.value):
+            elif not is_finite_real(m.value):
                 status = MetricStatus.NON_FINITE
             elif not spec.lower <= m.value <= spec.upper:
                 status = MetricStatus.OUT_OF_BOUNDS
@@ -166,7 +166,7 @@ class ObservationSchema:
                 status = MetricStatus.OK
             elif m.timestamp_s is None or not is_real(m.timestamp_s):
                 status = MetricStatus.NO_TIMESTAMP
-            elif not math.isfinite(m.timestamp_s):
+            elif not is_finite_real(m.timestamp_s):
                 # Must precede the comparisons below: every comparison with NaN is
                 # False, so a NaN timestamp would otherwise fall through to OK.
                 status = MetricStatus.INVALID_TIMESTAMP
