@@ -14,7 +14,7 @@ import math
 from vgcp.state import Demand, Measurement, ObservationSchema
 
 
-class ConservativeConstantForecast:
+class UpperBoundConstantForecast:
     def __init__(self, demand_schema: ObservationSchema, margin: float) -> None:
         if not (math.isfinite(margin) and margin >= 0):
             raise ValueError("forecast margin must be a finite number >= 0")

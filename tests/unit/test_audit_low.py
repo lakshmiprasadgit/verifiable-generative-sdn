@@ -126,3 +126,17 @@ def test_consistent_change_of_both_is_accepted():
         r["network"]["control"]["delta_t_s"] = 0.5
         r["intents"]["slot_duration_s"] = 0.5
     assert config_with(mutate).delta_t_s == 0.5
+
+
+# ---------------------------------------------------------------- L7: names do not claim unestablished properties
+def test_forecast_type_name_states_what_it_is(cfg):
+    from vgcp.models import UpperBoundConstantForecast
+
+    assert cfg.raw["shield"]["demand_forecast"]["type"] == "upper_bound_constant"
+    assert isinstance(VerificationShield.from_config(cfg).forecast, UpperBoundConstantForecast)
+
+
+def test_old_forecast_type_name_is_rejected():
+    with pytest.raises(ConfigError) as exc:
+        config_with(lambda r: r["shield"]["demand_forecast"].update(type="conservative_constant"))
+    assert "upper_bound_constant" in str(exc.value)

@@ -40,7 +40,7 @@ from vgcp.constraints import ConstraintVector, HardConstraints
 from vgcp.errors import ConfigError, is_finite_real, is_real, json_safe
 from vgcp.models import (
     AnalyticNominalModel,
-    ConservativeConstantForecast,
+    UpperBoundConstantForecast,
     DemandForecast,
     FallbackPolicy,
     StaticFallbackPolicy,
@@ -202,7 +202,7 @@ class VerificationShield:
             config,
             AnalyticNominalModel(config.topology, names, config.nominal_model),
             StaticFallbackPolicy(config.fallback_action),
-            ConservativeConstantForecast(config.demand_schema, config.shield.forecast_margin),
+            UpperBoundConstantForecast(config.demand_schema, config.shield.forecast_margin),
             HardConstraints(config.constraints, config.topology, config.slices),
         )
 

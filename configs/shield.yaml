@@ -11,7 +11,7 @@ measurements:
 check_constraints_along_rollout: true
 
 demand_forecast:
-  type: conservative_constant   # d-bar_{t+k} = (1 + margin) * d_t
+  type: upper_bound_constant   # d-bar_{t+k} = (1 + margin) * d_t
   margin: 0.2
 
 nominal_model:

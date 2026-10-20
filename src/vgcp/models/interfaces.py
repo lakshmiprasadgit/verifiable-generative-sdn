@@ -30,7 +30,11 @@ class Prediction:
 
 
 class TransitionModel(Protocol):
-    """Conservative nominal transition T-hat (paper Eq 12)."""
+    """Nominal transition model T-hat (paper Eq 12).
+
+    The paper requires T-hat to be conservative. That is not established for the
+    Stage 1 analytic model (it is uncalibrated); see docs/milestone1_design.md.
+    """
 
     def predict(self, state: NetworkState, action: ControlAction, demand: Demand) -> Prediction: ...
 
@@ -51,7 +55,8 @@ class FallbackPolicy(Protocol):
 
 
 class DemandForecast(Protocol):
-    """Conservative demand forecast d-bar_{t+k}, k = 0..H-1 (paper Eq 12)."""
+    """Demand forecast d-bar_{t+k}, k = 0..H-1 (paper Eq 12 asks for a conservative one;
+    an upper bound is conservative for load and latency only, see D10)."""
 
     def forecast(self, demand: Demand, horizon: int) -> list[Demand]: ...
 

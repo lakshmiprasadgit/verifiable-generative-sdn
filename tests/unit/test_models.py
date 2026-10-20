@@ -5,7 +5,7 @@ import math
 import pytest
 
 from factories import action_with, nominal_demand, nominal_state
-from vgcp.models import AnalyticNominalModel, ConservativeConstantForecast, StaticFallbackPolicy
+from vgcp.models import AnalyticNominalModel, UpperBoundConstantForecast, StaticFallbackPolicy
 from vgcp.state import Demand
 
 LN100 = math.log(100.0)
@@ -87,14 +87,14 @@ def test_energy_proxy(cfg, model):
 
 
 def test_forecast(cfg):
-    fc = ConservativeConstantForecast(cfg.demand_schema, 0.2)
+    fc = UpperBoundConstantForecast(cfg.demand_schema, 0.2)
     out = fc.forecast(nominal_demand(**{"active_devices.urllc": None}), 3)
     assert len(out) == 3 and all(isinstance(d, Demand) for d in out)
     assert [d.t for d in out] == [0, 1, 2]
     assert out[2].value("offered_load_mbps.embb") == pytest.approx(96.0)
     assert math.isnan(out[0].value("active_devices.urllc"))
     with pytest.raises(ValueError):
-        ConservativeConstantForecast(cfg.demand_schema, -0.1)
+        UpperBoundConstantForecast(cfg.demand_schema, -0.1)
 
 
 def test_static_fallback(cfg):

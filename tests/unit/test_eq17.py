@@ -26,7 +26,7 @@ from hypothesis import strategies as st
 from factories import NOW, action_with, config_with, nominal_demand, nominal_state
 from stl_reference import rho as reference_rho
 from vgcp.constraints import HardConstraints
-from vgcp.models import AnalyticNominalModel, ConservativeConstantForecast
+from vgcp.models import AnalyticNominalModel, UpperBoundConstantForecast
 from vgcp.shield import CheckStatus, VerificationShield
 from vgcp.signals import step_signals
 from vgcp.stl import Always, And, Eventually, Not, Or, Predicate, Top, Trace, Until, required_horizon, robustness
@@ -112,7 +112,7 @@ def in_eq17(cfg, state, demand, action, rho_min_of):
     if hc.evaluate(state, action).status != "satisfied":
         return False
     model = AnalyticNominalModel(cfg.topology, [s.name for s in cfg.slices], cfg.nominal_model)
-    d_bar = ConservativeConstantForecast(cfg.demand_schema, cfg.shield.forecast_margin).forecast(demand, cfg.horizon_H)
+    d_bar = UpperBoundConstantForecast(cfg.demand_schema, cfg.shield.forecast_margin).forecast(demand, cfg.horizon_H)
     states, actions = [state], [action]
     for k in range(cfg.horizon_H):  # Eqs 12-13
         states.append(model.predict(states[k], actions[k], d_bar[k]).state)

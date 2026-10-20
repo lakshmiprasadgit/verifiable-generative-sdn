@@ -183,7 +183,7 @@ later state or slot is a closed-loop decision for Milestone 4. No code in
   reads such a signal beyond offset 0 (`stl.signal_offsets`), because over the
   rollout it would only test the placeholder (D13). The shipped `mmtc_loss`
   intent is therefore a current-measurement check, `loss_rate.mmtc <= 0.02`.
-* d̄ – `ConservativeConstantForecast`: d̄_{t+k} = (1+margin)·d_t.
+* d̄ – `UpperBoundConstantForecast`: d̄_{t+k} = (1+margin)·d_t.
 * π₀ – `StaticFallbackPolicy`: one configured action (must be in A; checked at load).
 
 ### What an acceptance does and does not mean

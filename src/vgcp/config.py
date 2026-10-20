@@ -366,8 +366,8 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
     # --- shield settings
     meas = _get(shield_raw, "measurements", "shield")
     fc = _get(shield_raw, "demand_forecast", "shield")
-    if _get(fc, "type", "shield.demand_forecast") != "conservative_constant":
-        raise ConfigError("shield.demand_forecast.type: only 'conservative_constant' is implemented")
+    if _get(fc, "type", "shield.demand_forecast") != "upper_bound_constant":
+        raise ConfigError("shield.demand_forecast.type: only 'upper_bound_constant' is implemented")
     settings = ShieldSettings(
         max_staleness_s=_num(_get(meas, "max_staleness_s", "shield.measurements"),
                              "shield.measurements.max_staleness_s", lo=0.0, lo_open=True),

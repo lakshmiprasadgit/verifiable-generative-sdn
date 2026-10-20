@@ -20,7 +20,7 @@ deviation or extension (see [milestone1_design.md §6](milestone1_design.md));
 | Eq 10 | ρ_∧ = min | `_rho` (And) | `test_conjunction_eq10` | Impl |
 | Eq 11 | ρ_U = max_τ min(ρ₂(τ), min_{u∈[t,τ]} ρ₁(u)) | `_rho` (Until), closed [t, τ] | `test_until_eq11`, `test_until_uses_closed_interval_t_tau`; Eqs 8–11 vs naive oracle `stl_reference.py`: `test_robustness_matches_naive_eq8_to_11` | Impl |
 | Sec 2.2 | ρ > 0 satisfied, ρ < 0 violated | `stl.robustness.evaluate` → `Verdict` | sign-agreement property test | Impl\* (D5, D6, D7) |
-| Eq 12 | ŝ_{t+k+1} = T̂(ŝ_{t+k}, a_{t+k}, d̄_{t+k}) | `VerificationShield.rollout`; T̂ = `models.nominal.AnalyticNominalModel`; d̄ = `models.forecast.ConservativeConstantForecast` | test_models, test_shield | Impl\* (T̂ uncalibrated; D10) |
+| Eq 12 | ŝ_{t+k+1} = T̂(ŝ_{t+k}, a_{t+k}, d̄_{t+k}) | `VerificationShield.rollout`; T̂ = `models.nominal.AnalyticNominalModel`; d̄ = `models.forecast.UpperBoundConstantForecast` | test_models, test_shield | Impl\* (T̂ uncalibrated; D10) |
 | Eq 13 | a_{t+k} = a_t (k=0), π₀(ŝ_{t+k}) (k≥1) | `VerificationShield.rollout`; π₀ = `models.fallback.StaticFallbackPolicy` | `test_invalid_fallback_continuation_rejects` | Impl |
 | Eq 14 | ρ_φ(s_t, a_t) = ρ_φ(ŝ_{t:t+H}, â_{t:t+H}, t) | `VerificationShield._run_checks` (intent checks) | `test_accepts_fallback_in_nominal_conditions` (hand-checked ρ); intents may not read unmodelled outputs beyond offset 0: `test_unmodelled_signals.py` | Impl\* (D11, D13) |
 | Assumption 1 | H ≥ max_φ b_φ | `stl.ast.max_temporal_bound`, `required_horizon`; enforced in `config.build_config` | test_config (`test_assumption1_*`, `test_nested_horizon_*`) | Impl\* (D1) |

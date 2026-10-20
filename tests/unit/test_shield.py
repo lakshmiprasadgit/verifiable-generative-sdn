@@ -12,7 +12,7 @@ from factories import CONFIG_DIR, NOW, action_with, config_with, nominal_demand,
 from vgcp.action import ControlAction
 from vgcp.config import load_config
 from vgcp.constraints import HardConstraints
-from vgcp.models import AnalyticNominalModel, ConservativeConstantForecast, StaticFallbackPolicy
+from vgcp.models import AnalyticNominalModel, UpperBoundConstantForecast, StaticFallbackPolicy
 from vgcp.shield import CheckStatus, VerificationShield
 from vgcp.signals import step_signals
 from vgcp.state import Demand, Measurement, NetworkState
@@ -303,7 +303,7 @@ def test_invalid_fallback_continuation_rejects(cfg):
     names = [s.name for s in cfg.slices]
     sh = VerificationShield(
         cfg, AnalyticNominalModel(cfg.topology, names, cfg.nominal_model), BrokenFallback(),
-        ConservativeConstantForecast(cfg.demand_schema, 0.2),
+        UpperBoundConstantForecast(cfg.demand_schema, 0.2),
         HardConstraints(cfg.constraints, cfg.topology, cfg.slices),
     )
     cert = sh.verify(nominal_state(cfg), nominal_demand(), cfg.fallback_action, NOW)
@@ -322,7 +322,7 @@ def test_internal_error_is_never_accepted(cfg):
             return frozenset()
     sh = VerificationShield(
         cfg, ExplodingModel(), StaticFallbackPolicy(cfg.fallback_action),
-        ConservativeConstantForecast(cfg.demand_schema, 0.2),
+        UpperBoundConstantForecast(cfg.demand_schema, 0.2),
         HardConstraints(cfg.constraints, cfg.topology, cfg.slices),
     )
     cert = sh.verify(nominal_state(cfg), nominal_demand(), cfg.fallback_action, NOW)
@@ -343,7 +343,7 @@ def _in_feasible_set(cfg, state, demand, action):
     hc = HardConstraints(cfg.constraints, cfg.topology, cfg.slices)
     if hc.evaluate(state, action).status != "satisfied":
         return False
-    d_bar = [demand_k for demand_k in ConservativeConstantForecast(cfg.demand_schema, cfg.shield.forecast_margin).forecast(demand, cfg.horizon_H)]
+    d_bar = [demand_k for demand_k in UpperBoundConstantForecast(cfg.demand_schema, cfg.shield.forecast_margin).forecast(demand, cfg.horizon_H)]
     states, actions = [state], [action]
     for k in range(cfg.horizon_H):
         pred = model.predict(states[-1], actions[-1], d_bar[k])
