@@ -90,3 +90,15 @@ def test_huge_integer_in_action_vector_is_rejected(cfg):
 def test_huge_integer_trace_sample_is_invalid():
     tr = Trace({"x": [HUGE, 1.0]})
     assert ("x", 0) in tr.invalid and math.isnan(tr.value("x", 0))
+
+
+# ---------------------------------------------------------------- L4: property tests are reproducible
+def test_hypothesis_default_profile_is_deterministic():
+    import os
+
+    from hypothesis import settings
+
+    if os.environ.get("HYPOTHESIS_PROFILE", "deterministic") != "deterministic":
+        pytest.skip("a non-default Hypothesis profile was selected explicitly")
+    assert settings.default.derandomize is True
+    assert settings.default.database is None

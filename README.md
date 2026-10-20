@@ -52,6 +52,13 @@ scripts/setup_venv.sh
 scripts/run_unit_tests.sh
 ```
 
+Property-based tests (Hypothesis) are deterministic by default, so every run uses
+the same examples. To search with fresh random examples instead:
+
+```bash
+HYPOTHESIS_PROFILE=explore scripts/run_unit_tests.sh
+```
+
 Read first: [docs/milestone1_design.md](docs/milestone1_design.md) and
 [docs/traceability.md](docs/traceability.md).
 
