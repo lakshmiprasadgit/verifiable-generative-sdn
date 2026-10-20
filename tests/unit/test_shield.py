@@ -318,6 +318,8 @@ def test_internal_error_is_never_accepted(cfg):
             return frozenset()
         def required_demand_keys(self):
             return frozenset()
+        def unmodelled_state_keys(self):
+            return frozenset()
     sh = VerificationShield(
         cfg, ExplodingModel(), StaticFallbackPolicy(cfg.fallback_action),
         ConservativeConstantForecast(cfg.demand_schema, 0.2),

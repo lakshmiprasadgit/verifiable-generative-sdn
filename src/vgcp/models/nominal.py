@@ -10,9 +10,10 @@ A fluid / queueing approximation of the transport network:
 * slice p99 latency    k_safety * sum of per-hop p99 delays along the path
 * slice jitter         k_safety * sum of S_l / (1 - rho_l)
 * queue occupancy      sum of rho_l / (1 - rho_l) along the path            (M/M/1 mean)
-* loss                 0 inside the validity domain
+* loss                 0 inside the validity domain - a placeholder, not a prediction
 * energy proxy         sum over powered-on links of (P_idle + P_dyn * rho_l)
 * flow-table occupancy carried forward unchanged from the current state
+  (loss and flow-table occupancy are reported by unmodelled_state_keys(); see M5)
 
 Validity domain: all inputs known and every link utilization <= max_valid_utilization,
 with no load on a powered-off link. Outside it the predicted state may contain
@@ -90,6 +91,12 @@ class AnalyticNominalModel:
 
     def required_state_keys(self) -> frozenset[str]:
         return frozenset(f"flow_table_occupancy.{sw}" for sw in self.topology.switches)
+
+    def unmodelled_state_keys(self) -> frozenset[str]:
+        return frozenset(
+            [f"loss_rate.{s}" for s in self.slices]
+            + [f"flow_table_occupancy.{sw}" for sw in self.topology.switches]
+        )
 
     def required_demand_keys(self) -> frozenset[str]:
         keys = set()

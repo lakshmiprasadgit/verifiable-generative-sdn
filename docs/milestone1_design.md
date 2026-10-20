@@ -175,6 +175,12 @@ later state or slot is a closed-loop decision for Milestone 4. No code in
   concerns the learned world model W_ψ used for candidate selection (Eq 42), not
   T̂ in the certificate (Eq 14). Stage 1 has no W_ψ, so Def 2 is not implemented
   and there is no η setting (audit finding M2).
+* Placeholder outputs (audit M5): T̂ reports loss as 0 inside its validity domain
+  and carries flow-table occupancy forward; it declares these keys in
+  `unmodelled_state_keys()`. The shield refuses to be constructed if an intent
+  reads such a signal beyond offset 0 (`stl.signal_offsets`), because over the
+  rollout it would only test the placeholder (D13). The shipped `mmtc_loss`
+  intent is therefore a current-measurement check, `loss_rate.mmtc <= 0.02`.
 * d̄ – `ConservativeConstantForecast`: d̄_{t+k} = (1+margin)·d_t.
 * π₀ – `StaticFallbackPolicy`: one configured action (must be in A; checked at load).
 
@@ -233,6 +239,7 @@ components; it is a regression check, not independent evidence.
 | D10 | d̄ conservativeness | "conservative demand forecast" | one upper-bound forecast | conservative for load and latency, **optimistic** for lower bounds on throughput; no throughput lower-bound intents configured |
 | D11 | Trajectory start | ŝ_t = s_t (Eq 12) | as written | intents are partly decided by the current measurement, independently of a_t |
 | D12 | Nominal-model validity domain | T̂ is assumed conservative; no validity domain | shield rejects (UNKNOWN) if any rollout step is outside T̂'s validity domain (`nominal_model_domain`) | an analytic queueing model's formulas break down near saturation; using them there would certify on meaningless numbers. Not the paper's Def 2 (which concerns W_ψ) |
+| D13 | Intents on unmodelled signals | not discussed | an intent may read a signal the nominal model does not predict (loss, flow-table occupancy) only at the current step; otherwise the shield refuses to start | over the rollout such a signal is a placeholder, so the intent would be vacuous (audit M5) |
 
 ## 7. Illustrative parameters
 

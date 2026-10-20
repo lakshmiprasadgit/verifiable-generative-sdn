@@ -149,6 +149,25 @@ def required_horizon(phi: Formula) -> int:
     raise TypeError(f"not an STL formula: {phi!r}")
 
 
+def signal_offsets(phi: Formula) -> dict[str, int]:
+    """For each signal, the largest number of steps after the evaluation time at
+    which rho_phi reads it (0 = only the current sample)."""
+    if isinstance(phi, Top):
+        return {}
+    if isinstance(phi, Predicate):
+        return {phi.signal: 0}
+    if isinstance(phi, Not):
+        return signal_offsets(phi.child)
+    if isinstance(phi, (And, Until)):
+        shift = phi.b if isinstance(phi, Until) else 0
+        out: dict[str, int] = {}
+        for child in (phi.left, phi.right):
+            for sig, k in signal_offsets(child).items():
+                out[sig] = max(out.get(sig, 0), k + shift)
+        return out
+    raise TypeError(f"not an STL formula: {phi!r}")
+
+
 def to_text(phi: Formula) -> str:
     """Core-form text (derived operators appear expanded)."""
     if isinstance(phi, Top):

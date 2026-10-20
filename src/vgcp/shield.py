@@ -36,7 +36,7 @@ from typing import Any, Sequence
 from vgcp.action import ControlAction, action_fingerprint
 from vgcp.config import Intent, ProjectConfig
 from vgcp.constraints import ConstraintVector, HardConstraints
-from vgcp.errors import is_real, json_safe
+from vgcp.errors import ConfigError, is_real, json_safe
 from vgcp.models import (
     AnalyticNominalModel,
     ConservativeConstantForecast,
@@ -47,7 +47,7 @@ from vgcp.models import (
 )
 from vgcp.signals import ACTION_PREFIX, step_signals
 from vgcp.state import Demand, MetricStatus, NetworkState, Observation, ObservationSchema
-from vgcp.stl import Trace, evaluate, signals
+from vgcp.stl import Trace, evaluate, signal_offsets, signals
 
 
 class CheckStatus(str, Enum):
@@ -167,6 +167,18 @@ class VerificationShield:
         self.forecast = forecast
         self.constraints = constraints
         self.intents: tuple[Intent, ...] = config.intents
+        # Audit M5: a placeholder output of the model must not be read over the rollout.
+        unmodelled = model.unmodelled_state_keys()
+        ahead = [
+            f"intent '{it.name}' reads {sig} up to {k} step(s) ahead"
+            for it in self.intents for sig, k in sorted(signal_offsets(it.formula).items())
+            if k > 0 and sig in unmodelled
+        ]
+        if ahead:
+            raise ConfigError(
+                "intents read signals the nominal model does not predict: " + "; ".join(ahead)
+                + ". Such signals can only be checked on the current measurement (no temporal operator)."
+            )
         intent_state_keys = {
             sig for it in self.intents for sig in signals(it.formula)
             if not sig.startswith(ACTION_PREFIX)

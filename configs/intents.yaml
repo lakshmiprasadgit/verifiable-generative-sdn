@@ -29,8 +29,10 @@ intents:
     description: eMBB p99 latency stays at or below 40 ms over the horizon.
 
   - name: mmtc_loss
-    formula: "G[0,10](loss_rate.mmtc <= 0.02)"
-    description: mMTC packet loss stays at or below 2 % over the horizon.
+    # The Stage 1 nominal model does not predict loss (audit M5), so this intent is
+    # checked on the current measurement only; a G[0,10] version would be vacuous.
+    formula: "loss_rate.mmtc <= 0.02"
+    description: Measured mMTC packet loss is at or below 2 %.
 
   # Example of a bounded-response intent (disabled): if URLLC latency exceeds
   # 1 ms, it must recover within 3 slots. Required horizon = 7 + 3 = 10.

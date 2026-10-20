@@ -57,7 +57,7 @@ Read first: [docs/milestone1_design.md](docs/milestone1_design.md) and
 
 ## Known limitations and open audit findings
 
-An independent audit of Milestone 1 found issues; five are fixed:
+An independent audit of Milestone 1 found issues; six are fixed:
 
 * **C1 (fixed)** - non-finite measurement timestamps no longer pass freshness checks.
 * **H2 (fixed)** - unknown or misspelled configuration keys and non-string
@@ -75,6 +75,9 @@ An independent audit of Milestone 1 found issues; five are fixed:
 * **M2 (fixed)** - the paper's out-of-distribution threshold (Def 2) is no longer
   misapplied to the nominal model. The nominal model reports an explicit validity
   flag (extension D12); Def 2 awaits a learned world model.
+* **M5 (fixed)** - an intent may not read, over the rollout, a signal the nominal
+  model does not predict (loss, flow-table occupancy); the shield refuses such
+  configurations. The mMTC loss intent is now a current-measurement check.
 
 Unresolved:
 
@@ -85,8 +88,6 @@ Unresolved:
   paper's recursive-feasibility assumption cannot hold in such states.
 * **M4** - robustness values in different units are compared through one
   minimum; per-intent margins do not fix this for the paper's utility terms.
-* **M5** - intents on signals the nominal model does not predict (e.g. loss)
-  are vacuous over the rollout.
 
 Other limitations: the nominal model is uncalibrated and not shown to be
 conservative; the fallback policy's recursive feasibility is not checked; shield

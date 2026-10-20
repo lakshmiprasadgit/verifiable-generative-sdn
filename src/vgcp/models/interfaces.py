@@ -38,6 +38,11 @@ class TransitionModel(Protocol):
 
     def required_demand_keys(self) -> frozenset[str]: ...
 
+    def unmodelled_state_keys(self) -> frozenset[str]:
+        """State keys whose predicted values are placeholders (constant or carried
+        forward), not predictions. Intents may read them only at the current step."""
+        ...
+
 
 class FallbackPolicy(Protocol):
     """Pre-computed safe fallback pi_0 (paper Eq 13, Assumption 3)."""

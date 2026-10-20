@@ -195,10 +195,11 @@ def test_d3_removes_actions_that_eq17_admits():
 def test_d12_removes_actions_that_eq17_admits():
     # Without the capacity constraint, embb 47.5 + urllc 2.4 on path A gives
     # utilization 0.998: T-hat still returns numbers (rho < 1) but is outside its
-    # validity domain (> 0.95). Eq 17 with only the loss intent admits the action.
+    # validity domain (> 0.95). Eq 17 with an mMTC latency intent (path C, unaffected)
+    # admits the action.
     def mutate(raw):
         raw["constraints"]["link_capacity"]["enabled"] = False
-        raw["intents"]["intents"] = [{"name": "mmtc_loss", "formula": "G[0,10](loss_rate.mmtc <= 0.02)"}]
+        raw["intents"]["intents"] = [{"name": "mmtc_latency", "formula": "G[0,10](latency_p99_ms.mmtc <= 20.0)"}]
     cfg = config_with(mutate)
     a = action_with(cfg, path={"embb": "A"}, rate_budget_mbps={"embb": 47.5})
     s, d = nominal_state(cfg), nominal_demand()

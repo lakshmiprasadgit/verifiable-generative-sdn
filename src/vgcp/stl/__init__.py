@@ -13,6 +13,7 @@ from vgcp.stl.ast import (
     false,
     max_temporal_bound,
     required_horizon,
+    signal_offsets,
     signals,
     to_text,
 )
@@ -29,7 +30,7 @@ from vgcp.stl.signal import Trace, UnknownSignalError
 
 __all__ = [
     "Always", "And", "Eventually", "Formula", "Not", "Or", "Predicate", "Top", "Until",
-    "false", "max_temporal_bound", "required_horizon", "signals", "to_text",
+    "false", "max_temporal_bound", "required_horizon", "signal_offsets", "signals", "to_text",
     "ParseError", "parse",
     "StlResult", "TraceTooShortError", "Verdict", "evaluate", "robustness", "satisfied",
     "Trace", "UnknownSignalError",
