@@ -9,6 +9,11 @@
 # presented as a 6G requirement. The paper's "99.999% reliability" part cannot be
 # expressed on a single trajectory and will be measured empirically later.
 
+# Slot length (seconds) these intents were written for. It must equal
+# network.yaml control.delta_t_s, so changing the slot length forces a review of
+# every time bound below (G[0,10] means 10 slots, not 10 seconds).
+slot_duration_s: 1.0
+
 # Rollout horizon H (Eq 14). Must cover the deepest formula (Assumption 1; see docs).
 horizon_H: 10
 

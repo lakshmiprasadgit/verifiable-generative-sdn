@@ -99,7 +99,9 @@ indexed by slot k = 0..N−1. Missing samples are NaN. ±inf samples are treated
 as invalid measurements and stored as NaN. Non-numeric samples raise TypeError.
 
 **Temporal sampling convention.** Discrete time: slot k corresponds to time
-t₀ + k·Δt, with Δt = `control.delta_t_s` (1 s). The paper calls STL
+t₀ + k·Δt, with Δt = `control.delta_t_s` (1 s). `intents.yaml` states the slot length its bounds
+were written for (`slot_duration_s`); loading fails unless it equals Δt, so
+changing Δt cannot silently rescale every intent (audit L6). The paper calls STL
 "dense-time" but defines everything on slotted time (Sec 2.1); this
 implementation uses discrete-time semantics.
 

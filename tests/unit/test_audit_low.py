@@ -102,3 +102,27 @@ def test_hypothesis_default_profile_is_deterministic():
         pytest.skip("a non-default Hypothesis profile was selected explicitly")
     assert settings.default.derandomize is True
     assert settings.default.database is None
+
+
+# ---------------------------------------------------------------- L6: intent time bounds are tied to the slot length
+def test_intents_declare_the_slot_duration_they_were_written_for(cfg):
+    assert cfg.raw["intents"]["slot_duration_s"] == cfg.delta_t_s == 1.0
+
+
+def test_changing_delta_t_without_revisiting_intents_is_rejected():
+    with pytest.raises(ConfigError) as exc:
+        config_with(lambda r: r["network"]["control"].update(delta_t_s=0.1))
+    assert "slot_duration_s" in str(exc.value) and "delta_t_s" in str(exc.value)
+
+
+def test_slot_duration_is_required():
+    with pytest.raises(ConfigError) as exc:
+        config_with(lambda r: r["intents"].pop("slot_duration_s", None))
+    assert "slot_duration_s" in str(exc.value)
+
+
+def test_consistent_change_of_both_is_accepted():
+    def mutate(r):
+        r["network"]["control"]["delta_t_s"] = 0.5
+        r["intents"]["slot_duration_s"] = 0.5
+    assert config_with(mutate).delta_t_s == 0.5

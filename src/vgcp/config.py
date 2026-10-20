@@ -189,6 +189,7 @@ _SCHEMA = _Obj({
         "routing_validity": _Obj({"enabled": None}),
     }, label="constraint family"),
     "intents": _Obj({
+        "slot_duration_s": None,
         "horizon_H": None,
         "rho_min": None,
         "intents": _ListOf(_Obj({
@@ -316,6 +317,15 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
     constraints = ConstraintConfig.from_mapping(cons, slice_names)
 
     # --- intents Phi
+    # Time bounds in formulas count slots; changing the slot length must not silently
+    # change what every intent means (audit L6).
+    slot = _num(_get(intents_raw, "slot_duration_s", "intents"), "intents.slot_duration_s", lo=0.0, lo_open=True)
+    if slot != delta_t:
+        raise ConfigError(
+            f"intents.slot_duration_s = {slot} s but network.control.delta_t_s = {delta_t} s: "
+            "intent time bounds are counted in slots, so review every intent before changing "
+            "the slot length, then update slot_duration_s"
+        )
     H = _int(_get(intents_raw, "horizon_H", "intents"), "intents.horizon_H", lo=1)
     rho_min = _num(_get(intents_raw, "rho_min", "intents"), "intents.rho_min", lo=0.0, lo_open=True)
     known_signals = set(state_schema.keys) | set(action_signal_names(action_schema))
