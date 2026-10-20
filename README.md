@@ -59,6 +59,8 @@ the same examples. To search with fresh random examples instead:
 HYPOTHESIS_PROFILE=explore scripts/run_unit_tests.sh
 ```
 
+Current status and open decisions: [docs/STATUS.md](docs/STATUS.md).
+
 Read first: [docs/milestone1_design.md](docs/milestone1_design.md) and
 [docs/traceability.md](docs/traceability.md).
 
