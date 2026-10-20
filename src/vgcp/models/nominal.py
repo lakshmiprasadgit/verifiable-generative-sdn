@@ -16,7 +16,8 @@ A fluid / queueing approximation of the transport network:
 
 Validity domain: all inputs known and every link utilization <= max_valid_utilization,
 with no load on a powered-off link. Outside it the predicted state may contain
-missing values and the reported uncertainty is +inf (cf. paper Def 2).
+missing values and the prediction is flagged ``in_domain=False`` (D12; this is not
+the learned world model's uncertainty of paper Def 2).
 
 Summing per-hop p99 values is a heuristic, not a proven bound on the end-to-end
 p99. The model is NOT shown to be conservative with respect to the real
@@ -164,5 +165,4 @@ class AnalyticNominalModel:
         metrics = {
             k: Measurement(None if math.isnan(v) else v, None) for k, v in values.items()
         }
-        uncertainty = math.inf if notes else 0.0
-        return Prediction(NetworkState(state.t + 1, metrics), uncertainty, tuple(notes))
+        return Prediction(NetworkState(state.t + 1, metrics), not notes, tuple(notes))

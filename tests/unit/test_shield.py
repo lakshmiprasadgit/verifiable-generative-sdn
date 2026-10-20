@@ -22,7 +22,7 @@ from vgcp.stl import Trace, robustness
 _CFG = load_config(CONFIG_DIR)
 _SHIELD = VerificationShield.from_config(_CFG)
 
-LATER_CHECKS = ["hard_constraints_now", "rollout_model_domain", "fallback_continuation",
+LATER_CHECKS = ["hard_constraints_now", "nominal_model_domain", "fallback_continuation",
                 "hard_constraints_rollout", "intent:urllc_latency", "intent:embb_latency", "intent:mmtc_loss"]
 
 
@@ -270,8 +270,8 @@ def test_out_of_domain_rollout_rejects():
     cert = sh.verify(nominal_state(sh.cfg), nominal_demand(), a, NOW)
     assert not cert.accepted
     assert status(cert, "hard_constraints_now") is CheckStatus.PASS
-    assert status(cert, "rollout_model_domain") is CheckStatus.UNKNOWN
-    assert cert.max_uncertainty == math.inf
+    assert status(cert, "nominal_model_domain") is CheckStatus.UNKNOWN
+    assert cert.nominal_model_in_domain is False
     assert status(cert, "intent:urllc_latency") is CheckStatus.UNKNOWN
 
 
@@ -330,7 +330,10 @@ def test_internal_error_is_never_accepted(cfg):
 
 # ---------------------------------------------------------------- Eq 17 consistency
 def _in_feasible_set(cfg, state, demand, action):
-    """Independent re-statement of Eq 17 built directly from Eqs 12-14 and 16."""
+    """The shield's *extended* feasible set: Eq 17 plus the domain check (D12) and,
+    if enabled, c along the rollout (D3). Built from the same T-hat, c, forecast and
+    STL evaluator as the shield, so this is a regression/consistency check, not
+    independent evidence; see test_eq17.py for the comparison with Eq 17 itself."""
     if cfg.action_schema.validate(action):
         return False
     names = [s.name for s in cfg.slices]
@@ -342,7 +345,7 @@ def _in_feasible_set(cfg, state, demand, action):
     states, actions = [state], [action]
     for k in range(cfg.horizon_H):
         pred = model.predict(states[-1], actions[-1], d_bar[k])
-        if pred.uncertainty > cfg.shield.ood_threshold_eta:
+        if not pred.in_domain:
             return False
         states.append(pred.state)
         actions.append(cfg.fallback_action)
@@ -356,8 +359,8 @@ def _in_feasible_set(cfg, state, demand, action):
     return True
 
 
-def test_shield_matches_eq17_on_action_grid(cfg, shield):
-    """Soundness (and completeness) w.r.t. the model: V = 1 iff a in A_Phi(s) on a grid of A."""
+def test_shield_matches_extended_feasible_set_on_action_grid(cfg, shield):
+    """V = 1 iff a is in the extended feasible set (see _in_feasible_set) on a grid of A."""
     s, d = nominal_state(cfg), nominal_demand()
     paths = cfg.topology.paths
     accepted = rejected = 0

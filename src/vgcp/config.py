@@ -45,7 +45,6 @@ class Intent:
 @dataclass(frozen=True)
 class ShieldSettings:
     max_staleness_s: float
-    ood_threshold_eta: float
     check_constraints_along_rollout: bool
     forecast_margin: float
 
@@ -203,7 +202,6 @@ _SCHEMA = _Obj({
     }),
     "shield": _Obj({
         "measurements": _Obj({"max_staleness_s": None}),
-        "ood_threshold_eta": None,
         "check_constraints_along_rollout": None,
         "demand_forecast": _Obj({"type": _STR, "margin": None}),
         "nominal_model": _Obj({
@@ -364,8 +362,6 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
     settings = ShieldSettings(
         max_staleness_s=_num(_get(meas, "max_staleness_s", "shield.measurements"),
                              "shield.measurements.max_staleness_s", lo=0.0, lo_open=True),
-        ood_threshold_eta=_num(_get(shield_raw, "ood_threshold_eta", "shield"),
-                               "shield.ood_threshold_eta", lo=0.0),
         check_constraints_along_rollout=_bool(
             _get(shield_raw, "check_constraints_along_rollout", "shield"),
             "shield.check_constraints_along_rollout"),

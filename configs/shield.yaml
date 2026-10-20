@@ -6,11 +6,6 @@ measurements:
   # stale and makes the safety status UNKNOWN -> reject. Two control slots.
   max_staleness_s: 2.0
 
-# Out-of-distribution threshold eta (Def 2). The Milestone 1 analytical model reports
-# uncertainty 0 inside its validity domain and +inf outside, so any finite eta >= 0
-# rejects exactly the out-of-domain rollouts. Re-tune when a calibrated model exists.
-ood_threshold_eta: 0.5
-
 # Also require c(s-hat, a-hat) <= 0 at every rollout step k = 1..H.
 # Paper Eq 17 only requires k = 0; true is stricter.
 check_constraints_along_rollout: true

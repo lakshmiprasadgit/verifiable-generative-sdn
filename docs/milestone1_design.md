@@ -136,8 +136,9 @@ Checks, in order, each `PASS` / `FAIL` / `UNKNOWN`:
    nominal model or an intent is usable (§1).
 3. `demand_measurements` – same for d_t.
 4. `hard_constraints_now` – c(s_t, a_t) ≤ 0.
-5. `rollout_model_domain` – the projected trajectory (Eqs 12–13) stays inside
-   the nominal model's validity domain: max_k u ≤ η (Def 2).
+5. `nominal_model_domain` – every predicted step of the projected trajectory
+   (Eqs 12–13) is inside the nominal model's validity domain (extension D12;
+   this is not the paper's Def 2, see below).
 6. `fallback_continuation` – π₀'s actions along the rollout are in A.
 7. `hard_constraints_rollout` – c(ŝ_{t+k}, â_{t+k}) ≤ 0 for k = 1..H
    (configurable; stricter than Eq 17).
@@ -166,10 +167,14 @@ later state or slot is a closed-loop decision for Milestone 4. No code in
 
 **Rollout components (Stage 1).**
 * T̂ – `AnalyticNominalModel`: fluid load and M/M/1 queueing approximation,
-  formulas in `src/vgcp/models/nominal.py`. **Uncalibrated.** It reports
-  u = 0 inside its validity domain and u = +∞ outside it (utilization above
-  `max_valid_utilization`, load on a powered-off link, unknown inputs). This
-  u is a domain indicator, not the calibrated uncertainty of Eq 23.
+  formulas in `src/vgcp/models/nominal.py`. **Uncalibrated.** Each prediction
+  carries `in_domain`, which is false when utilization exceeds
+  `max_valid_utilization`, load is routed over a powered-off link, or an input
+  is unknown (D12). It carries no uncertainty value.
+* The paper's out-of-distribution trigger (Def 2, Constraint 3: u_ψ > η ⇒ π₀)
+  concerns the learned world model W_ψ used for candidate selection (Eq 42), not
+  T̂ in the certificate (Eq 14). Stage 1 has no W_ψ, so Def 2 is not implemented
+  and there is no η setting (audit finding M2).
 * d̄ – `ConservativeConstantForecast`: d̄_{t+k} = (1+margin)·d_t.
 * π₀ – `StaticFallbackPolicy`: one configured action (must be in A; checked at load).
 
@@ -178,10 +183,26 @@ later state or slot is a closed-loop decision for Milestone 4. No code in
 **Established by the implementation.** V = 1 ⇒ a ∈ A_Φ(s_t) as defined by
 Eq 17, *where ρ_φ is computed with the configured T̂, d̄ and π₀ and c is the
 configured constraint set*. This is Assumption 2 (soundness) **relative to
-the model**. It holds by construction: the shield evaluates the definition.
-`test_shield_matches_eq17_on_action_grid` checks it against an independent
-restatement of Eq 17 over 648 actions (75 accepted, 573 rejected); the outcomes coincide (iff) and both
-accept and reject occur.
+the model**. The shield evaluates Eq 17 and then applies extensions (measurement
+validity, D3, D12, π₀ outputs in A) that can only remove actions, so the accepted
+set is a subset of Eq 17's; it is not claimed to equal it.
+
+Evidence (`tests/unit/test_eq17.py`, audit finding M1):
+* the STL evaluator matches a naive, separately written transcription of
+  Eqs 8–11 (`tests/unit/stl_reference.py`) on random formulas and traces;
+* a small instance with an action-signal intent whose accept/reject outcomes and
+  ρ values are calculated by hand, with no shield code involved;
+* a literal Eq 17 reference (c at k = 0 only, no domain check, ρ from the naive
+  oracle) on a 648-action grid. It shares T̂, d̄, π₀ and c with the shield because
+  Eq 17 is defined in terms of them, but not the shield's decision, rollout or STL
+  code. Every accepted action is in Eq 17's set; on this grid the two sets
+  coincide (75 accepted, 573 rejected) both with D3 off (Eq 17 as written) and on,
+  and any Eq 17 action the shield rejects must be explained by an extension check;
+* targeted cases where D3 and D12 each remove an action that Eq 17 admits.
+
+`test_shield_matches_extended_feasible_set_on_action_grid` (in `test_shield.py`)
+compares the shield with a restatement of its *extended* set built from the same
+components; it is a regression check, not independent evidence.
 
 **Not established.**
 * That the real (emulated) network behaves as T̂ predicts. T̂ is
@@ -211,6 +232,7 @@ accept and reject occur.
 | D9 | Time domain | "dense-time" STL | discrete slots of Δt | the paper's own model is slotted |
 | D10 | d̄ conservativeness | "conservative demand forecast" | one upper-bound forecast | conservative for load and latency, **optimistic** for lower bounds on throughput; no throughput lower-bound intents configured |
 | D11 | Trajectory start | ŝ_t = s_t (Eq 12) | as written | intents are partly decided by the current measurement, independently of a_t |
+| D12 | Nominal-model validity domain | T̂ is assumed conservative; no validity domain | shield rejects (UNKNOWN) if any rollout step is outside T̂'s validity domain (`nominal_model_domain`) | an analytic queueing model's formulas break down near saturation; using them there would certify on meaningless numbers. Not the paper's Def 2 (which concerns W_ψ) |
 
 ## 7. Illustrative parameters
 

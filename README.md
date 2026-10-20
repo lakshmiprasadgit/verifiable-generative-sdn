@@ -57,7 +57,7 @@ Read first: [docs/milestone1_design.md](docs/milestone1_design.md) and
 
 ## Known limitations and open audit findings
 
-An independent audit of Milestone 1 found issues; three are fixed:
+An independent audit of Milestone 1 found issues; five are fixed:
 
 * **C1 (fixed)** - non-finite measurement timestamps no longer pass freshness checks.
 * **H2 (fixed)** - unknown or misspelled configuration keys and non-string
@@ -68,6 +68,13 @@ An independent audit of Milestone 1 found issues; three are fixed:
   production apply step consumes certificates yet, so authorization is not
   enforced until the closed loop exists (Milestone 4). The input context is
   recorded but not checked.
+* **M1 (fixed)** - the evidence for Eq 17 is now a hand-calculated instance, a
+  naive independent transcription of the STL robustness equations, and a literal
+  Eq 17 reference that checks the shield is sound (accepts only Eq 17 actions),
+  with every difference attributed to a documented extension.
+* **M2 (fixed)** - the paper's out-of-distribution threshold (Def 2) is no longer
+  misapplied to the nominal model. The nominal model reports an explicit validity
+  flag (extension D12); Def 2 awaits a learned world model.
 
 Unresolved:
 
@@ -76,10 +83,6 @@ Unresolved:
 * **H3** - with intents evaluated from the measured state, the fallback policy is
   rejected whenever the current measurement already violates an intent, so the
   paper's recursive-feasibility assumption cannot hold in such states.
-* **M1** - the Eq 17 grid test reuses the shield's own components and checks the
-  extended feasible set, not an independent restatement of Eq 17.
-* **M2** - the out-of-distribution threshold is applied to the nominal model's
-  validity flag, not to the learned world model's uncertainty (paper Def 2).
 * **M4** - robustness values in different units are compared through one
   minimum; per-intent margins do not fix this for the paper's utility terms.
 * **M5** - intents on signals the nominal model does not predict (e.g. loss)

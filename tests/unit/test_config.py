@@ -87,7 +87,8 @@ def test_action_signal_in_intent():
     (lambda r: r["shield"]["fallback_action"]["path"].update(urllc="Z"), "not in the action set A"),
     (lambda r: r["shield"]["fallback_action"].pop("link_power"), "exactly the fields"),
     (lambda r: r["shield"]["measurements"].update(max_staleness_s=0), "must be >"),
-    (lambda r: r["shield"].update(ood_threshold_eta=-0.1), "must be >= 0"),
+    # eta (paper Def 2) applies to the learned world model, which Stage 1 does not have (M2)
+    (lambda r: r["shield"].update(ood_threshold_eta=0.5), "unknown key 'ood_threshold_eta'"),
     (lambda r: r["shield"]["demand_forecast"].update(type="arima"), "only 'conservative_constant'"),
     (lambda r: r["shield"]["nominal_model"].update(max_valid_utilization=1.0), "max_valid_utilization"),
     (lambda r: r["shield"]["nominal_model"].update(latency_safety_factor=0.5), "latency_safety_factor"),

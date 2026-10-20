@@ -25,7 +25,7 @@ def test_urllc_latency_hand_calculation(cfg, model):
     d = nominal_demand(**{"offered_load_mbps.urllc": 2.4})
     pred = model.predict(nominal_state(cfg), cfg.fallback_action, d)
     hop = 0.1 + 0.05 + LN100 * 0.01024 / (1 - 0.048)
-    assert pred.uncertainty == 0.0
+    assert pred.in_domain is True
     assert pred.state.value("link_utilization.l12") == pytest.approx(0.048)
     assert pred.state.value("latency_p99_ms.urllc") == pytest.approx(1.5 * 2 * hop)
     assert pred.state.value("latency_p99_ms.urllc") == pytest.approx(0.59861, abs=1e-5)
@@ -58,7 +58,7 @@ def test_out_of_domain_utilization(cfg, model):
     # embb 48 + urllc 2 on A -> rho = 1.0 > 0.95
     a = action_with(cfg, path={"embb": "A"}, rate_budget_mbps={"embb": 48.0})
     pred = model.predict(nominal_state(cfg), a, nominal_demand())
-    assert pred.uncertainty == math.inf
+    assert pred.in_domain is False
     assert math.isnan(pred.state.value("latency_p99_ms.urllc"))  # rho >= 1: no prediction
     assert any("utilization" in n for n in pred.notes)
 
@@ -66,13 +66,13 @@ def test_out_of_domain_utilization(cfg, model):
 def test_missing_demand_is_out_of_domain(cfg, model):
     d = nominal_demand(**{"offered_load_mbps.embb": None})
     pred = model.predict(nominal_state(cfg), cfg.fallback_action, d)
-    assert pred.uncertainty == math.inf
+    assert pred.in_domain is False
     assert math.isnan(pred.state.value("throughput_mbps.embb"))
 
 
 def test_load_on_powered_off_link_is_out_of_domain(cfg, model):
     pred = model.predict(nominal_state(cfg), action_with(cfg, link_power={"l46": False}), nominal_demand())
-    assert pred.uncertainty == math.inf
+    assert pred.in_domain is False
 
 
 def test_energy_proxy(cfg, model):

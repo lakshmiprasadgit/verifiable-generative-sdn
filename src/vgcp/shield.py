@@ -8,8 +8,8 @@ shield runs explicit checks and accepts only if every check PASSES:
                           finite, within S's bounds and fresh               Sec 2.1
   demand_measurements     same for the demand metrics d_t                   Sec 2.1
   hard_constraints_now    c(s_t, a_t) <= 0                                  Eqs 16-17
-  rollout_model_domain    projected trajectory (Eqs 12-13) stays inside the
-                          nominal model's validity domain: u <= eta         Def 2
+  nominal_model_domain    every step of the projected trajectory (Eqs 12-13)
+                          is inside the nominal model's validity domain     extension (D12)
   fallback_continuation   pi_0 outputs along the rollout are in A           Eq 13
   hard_constraints_rollout c(s-hat_{t+k}, a-hat_{t+k}) <= 0, k = 1..H
                           (stricter than Eq 17; configurable)
@@ -75,7 +75,7 @@ class Certificate:
     constraints_now: dict[str, float | None]  # c(s_t, a_t) (Eq 16)
     rho_min: dict[str, float]
     horizon_H: int
-    max_uncertainty: float | None
+    nominal_model_in_domain: bool | None  # None if the rollout was not run
     config_hash: str
     # Binding to what was certified (audit M3). The action is immutable (ControlAction
     # freezes its fields); the inputs are identified by fingerprints.
@@ -117,7 +117,7 @@ class Certificate:
             "constraints_now": self.constraints_now,
             "rho_min": self.rho_min,
             "horizon_H": self.horizon_H,
-            "max_uncertainty": self.max_uncertainty,
+            "nominal_model_in_domain": self.nominal_model_in_domain,
             "config_hash": self.config_hash,
             "action": self.action.to_dict() if self.action is not None else None,
             "action_fingerprint": self.action_fingerprint,
@@ -146,7 +146,7 @@ class Rollout:
 
     states: tuple[NetworkState, ...]
     actions: tuple[ControlAction, ...]
-    uncertainties: tuple[float, ...]
+    in_domain: tuple[bool, ...]  # one flag per predicted step
     notes: tuple[str, ...]
     # Non-empty if pi_0 returned an action outside A; the rollout stops at that step.
     invalid_fallback: tuple[str, ...] = ()
@@ -194,7 +194,7 @@ class VerificationShield:
         checks: list[CheckResult] = []
         robustness: dict[str, float | None] = {}
         c_now: dict[str, float | None] = {}
-        max_u: float | None = None
+        in_domain: bool | None = None
         t = state.t if isinstance(state, NetworkState) else -1
         # Identify the certified action and inputs before any check reads them.
         bound_action = action if isinstance(action, ControlAction) else None
@@ -205,14 +205,14 @@ class VerificationShield:
         except OverflowError:
             bound_now = None
         try:
-            max_u = self._run_checks(state, demand, action, now_s, checks, robustness, c_now)
+            in_domain = self._run_checks(state, demand, action, now_s, checks, robustness, c_now)
         except Exception as exc:  # an exception must never turn into acceptance
             checks.append(CheckResult("internal_error", CheckStatus.UNKNOWN, repr(exc)))
         accepted = bool(checks) and all(c.status is CheckStatus.PASS for c in checks)
         return Certificate(
             accepted=accepted, t=t, checks=tuple(checks), robustness=robustness,
             constraints_now=c_now, rho_min={it.name: it.rho_min for it in self.intents},
-            horizon_H=self.cfg.horizon_H, max_uncertainty=max_u, config_hash=self.cfg.config_hash,
+            horizon_H=self.cfg.horizon_H, nominal_model_in_domain=in_domain, config_hash=self.cfg.config_hash,
             action=bound_action, action_fingerprint=bound_fp,
             now_s=bound_now,
             state_fingerprint=state_fp, demand_fingerprint=demand_fp,
@@ -222,24 +222,24 @@ class VerificationShield:
         """Eqs 12-13: s-hat_t = s_t, a-hat_t = a_t, a-hat_{t+k} = pi_0(s-hat_{t+k}) for k >= 1."""
         H = self.cfg.horizon_H
         d_bar = self.forecast.forecast(demand, H)
-        states, actions, us, notes = [state], [action], [], []
+        states, actions, flags, notes = [state], [action], [], []
         for k in range(H):
             pred = self.model.predict(states[k], actions[k], d_bar[k])
             states.append(pred.state)
-            us.append(pred.uncertainty)
+            flags.append(pred.in_domain)
             notes += [f"k={k}: {n}" for n in pred.notes]
             next_action = self.fallback.act(pred.state)
             errors = self.cfg.action_schema.validate(next_action)
             if errors:
                 bad = (f"k={k + 1}: " + "; ".join(errors),)
-                return Rollout(tuple(states), tuple(actions), tuple(us), tuple(notes), bad)
+                return Rollout(tuple(states), tuple(actions), tuple(flags), tuple(notes), bad)
             actions.append(next_action)
-        return Rollout(tuple(states), tuple(actions), tuple(us), tuple(notes))
+        return Rollout(tuple(states), tuple(actions), tuple(flags), tuple(notes))
 
     # ---------------------------------------------------------------- checks
-    def _run_checks(self, state, demand, action, now_s, checks, robustness, c_now) -> float | None:
+    def _run_checks(self, state, demand, action, now_s, checks, robustness, c_now) -> bool | None:
         intent_names = [f"intent:{it.name}" for it in self.intents]
-        later = ["hard_constraints_now", "rollout_model_domain", "fallback_continuation",
+        later = ["hard_constraints_now", "nominal_model_domain", "fallback_continuation",
                  "hard_constraints_rollout", *intent_names]
 
         errors = self.cfg.action_schema.validate(action)
@@ -261,14 +261,13 @@ class VerificationShield:
         checks.append(self._constraint_check("hard_constraints_now", [vec]))
 
         roll = self.rollout(state, action, demand)
-        us = roll.uncertainties
-        max_u = math.nan if any(math.isnan(u) for u in us) else max(us, default=0.0)
-        eta = self.cfg.shield.ood_threshold_eta
-        in_domain = not math.isnan(max_u) and max_u <= eta
+        # Only an explicit True counts as in-domain (fail closed on anything else).
+        in_domain = all(flag is True for flag in roll.in_domain)
         checks.append(CheckResult(
-            "rollout_model_domain", CheckStatus.PASS if in_domain else CheckStatus.UNKNOWN,
-            f"max uncertainty {max_u} vs eta {eta}" + ("" if in_domain else "; " + "; ".join(roll.notes)),
-            {"max_uncertainty": max_u, "eta": eta},
+            "nominal_model_domain", CheckStatus.PASS if in_domain else CheckStatus.UNKNOWN,
+            "every predicted step is inside the nominal model's validity domain" if in_domain
+            else "nominal model outside its validity domain: " + "; ".join(roll.notes),
+            {"steps_out_of_domain": [k for k, f in enumerate(roll.in_domain) if f is not True]},
         ))
 
         bad_fallback = list(roll.invalid_fallback)
@@ -292,7 +291,7 @@ class VerificationShield:
             checks += [CheckResult(n, CheckStatus.UNKNOWN, reason) for n in intent_names]
             for it in self.intents:
                 robustness[it.name] = None
-            return max_u
+            return in_domain
 
         trace = Trace.from_steps([
             step_signals(self.cfg.state_schema, self.cfg.action_schema, s, a)
@@ -309,7 +308,7 @@ class VerificationShield:
                 status, detail = CheckStatus.FAIL, f"rho={res.robustness:.6g} < rho_min={it.rho_min:g}"
             checks.append(CheckResult(f"intent:{it.name}", status, detail,
                                       {"robustness": res.robustness, "verdict": res.verdict.value}))
-        return max_u
+        return in_domain
 
     def _measurements(self, name: str, cls: type, obs: Any, schema: ObservationSchema,
                       keys: Sequence[str], now_s: float) -> CheckResult:
