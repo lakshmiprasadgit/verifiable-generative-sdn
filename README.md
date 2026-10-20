@@ -85,6 +85,14 @@ An independent audit of Milestone 1 found issues; six are fixed:
 * **M5 (fixed)** - an intent may not read, over the rollout, a signal the nominal
   model does not predict (loss, flow-table occupancy); the shield refuses such
   configurations. The mMTC loss intent is now a current-measurement check.
+* **Low-severity findings L1-L8** - addressed: disabled checks are reported as
+  not applicable (L1); oversized numbers and deeply nested formulas give clear
+  errors (L2); the traceability table and decision register are complete (L3);
+  property tests are deterministic (L4); intents declare the slot length they
+  were written for (L6); names no longer claim "conservative" (L7). L5 (the
+  utilization bound versus real counter jitter) and L8 (exact floating-point
+  comparison at rho_min) are documented; L5 is revisited with real data in
+  Milestone 3.
 
 Unresolved:
 

@@ -12,7 +12,7 @@ deviation or extension (see [milestone1_design.md §6](milestone1_design.md));
 | Eq 2 | a_t ∈ A ⊆ R^{n_a}, bounded, mixed discrete/continuous | `vgcp.action.ControlAction`, `ActionSchema.validate/to_vector/from_vector/vector_bounds` | test_action | Impl (subset of components, §2) |
 | Eq 3 | d_t ∈ D ⊆ R^{n_d} | `vgcp.state.Demand`, demand schema | test_state | Impl (load and devices only) |
 | Eq 4 | s_{t+1} = T(s_t, a_t, d_t, ε_t), unknown | real network (Milestone 2) | – | Later |
-| Eq 5 | predicates p_i : S × A → R | `stl.ast.Predicate`; signals from s and a in `vgcp.signals.step_signals` | test_stl_robustness, test_shield | Impl (D8) |
+| Eq 5 | predicates p_i : S × A → R | `stl.ast.Predicate`; signals from s and a in `vgcp.signals.step_signals` | test_stl_robustness, test_shield | Impl\* (subset: single-signal comparisons `x <= c` / `x >= c`, D8, D17) |
 | Eq 6 | p₁ = L_max − latency | `Predicate(op="<=").value` = c − x | `test_predicate_le_matches_eq6` | Impl |
 | Eq 7 | STL syntax ⊤, p ≥ 0, ¬, ∧, U[a,b]; ◇, □ derived | `stl.ast` (core nodes + `Eventually`, `Always`, `Or`, `false` constructors), `stl.parser` | test_stl_parser, `test_derived_operators_expand_to_core` | Impl |
 | Eq 8 | ρ_p = p_i(s_t, a_t) | `stl.robustness._rho` (Predicate) | hand cases | Impl |
@@ -25,7 +25,7 @@ deviation or extension (see [milestone1_design.md §6](milestone1_design.md));
 | Eq 14 | ρ_φ(s_t, a_t) = ρ_φ(ŝ_{t:t+H}, â_{t:t+H}, t) | `VerificationShield._run_checks` (intent checks) | `test_accepts_fallback_in_nominal_conditions` (hand-checked ρ); intents may not read unmodelled outputs beyond offset 0: `test_unmodelled_signals.py` | Impl\* (D11, D13) |
 | Assumption 1 | H ≥ max_φ b_φ | `stl.ast.max_temporal_bound`, `required_horizon`; enforced in `config.build_config` | test_config (`test_assumption1_*`, `test_nested_horizon_*`) | Impl\* (D1) |
 | Sec 2.2 | Φ ≠ ∅, else Φ = {⊤} | `config.build_config` | `test_empty_intent_set_becomes_top`, `test_top_intent_set` | Impl |
-| Eq 16 | hard constraints c(s, a) ≤ 0 | `vgcp.constraints.HardConstraints`, configs/constraints.yaml | test_constraints | Impl |
+| Eq 16 | hard constraints c(s, a) ≤ 0 | `vgcp.constraints.HardConstraints`, configs/constraints.yaml | test_constraints | Impl\* (interpretation: link capacity uses reserved budgets, not measured load, D16; see open finding H1) |
 | Eq 17 | A_Φ(s) = {a ∈ A : ρ_φ ≥ ρ_min ∀φ, c ≤ 0} | shield checks 1, 4, 8; extensions 2, 3, 5, 6, 7 only remove actions | test_eq17: hand-calculated instance, literal Eq 17 reference on a 648-action grid (soundness; gaps attributed to extensions), `test_d3_*`, `test_d12_*` | Impl\* (D2, D3, D12) |
 | Eq 18 | V : S × A × Φ → {0, 1} | `VerificationShield.verify` → `Certificate.accepted` | test_shield | Impl\* (D4) |
 | Assumption 2 | V = 1 ⇒ a ∈ A_Φ(s) | holds by construction **relative to T̂, d̄, π₀, c**; not for the real network | `test_shield_is_sound_wrt_literal_eq17_on_grid`, `test_acceptance_implies_every_check_passed` | Impl (model-relative only) |

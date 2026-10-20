@@ -140,3 +140,16 @@ def test_old_forecast_type_name_is_rejected():
     with pytest.raises(ConfigError) as exc:
         config_with(lambda r: r["shield"]["demand_forecast"].update(type="conservative_constant"))
     assert "upper_bound_constant" in str(exc.value)
+
+
+# ---------------------------------------------------------------- L8: rho >= rho_min is an exact float comparison
+def test_rho_min_comparison_is_exact_floating_point(cfg, shield):
+    # Measured URLLC latency 0.95 ms against the 1 ms bound: rho = 1.0 - 0.95, which in
+    # binary floating point is 0.050000000000000044, just above rho_min = 0.05. The
+    # shield compares exactly (no tolerance), so this is accepted. Values within
+    # rounding error of rho_min can fall either side; choose rho_min with that in mind.
+    rho = 1.0 - 0.95
+    assert rho != 0.05 and rho > 0.05
+    cert = shield.verify(nominal_state(cfg, **{"latency_p99_ms.urllc": 0.95}), nominal_demand(), cfg.fallback_action, NOW)
+    assert cert.robustness["urllc_latency"] == rho
+    assert cert.accepted

@@ -33,7 +33,10 @@ if it is present, numeric (not bool), finite, inside its configured bounds,
 timestamped, not in the future, and no older than `max_staleness_s`
 (`configs/shield.yaml`; both bounds are inclusive). Anything else yields a
 specific status (`missing`, `stale`, `out_of_bounds`, …). Out-of-bounds values
-are rejected, never clipped. Unexpected metric keys are reported as
+are rejected, never clipped. Measured link utilization is bounded by [0, 1];
+real port counters can read slightly above 1 because of sampling jitter, which
+would make the shield reject (fail safe, but costs availability). The bound will
+be revisited with real counter data in Milestone 3 (audit L5). Unexpected metric keys are reported as
 `unknown_key`.
 
 ## 2. Control action a_t and the action set A (paper Eq 2)
@@ -152,8 +155,15 @@ Checks, in order, each `PASS` / `FAIL` / `UNKNOWN`:
 prerequisite (1–3) fails, the later checks are recorded as `UNKNOWN`
 ("skipped"), never `PASS`. Any exception inside the shield is recorded as
 `internal_error: UNKNOWN`, so an exception is a rejection. The `Certificate`
-records every check with detail, per-intent ρ, the c(s_t, a_t) vector,
-max u, H, ρ_min and the configuration hash, and it serialises to strict JSON.
+records every check with detail, per-intent ρ, the c(s_t, a_t) vector, whether
+the nominal model stayed in its validity domain, H, ρ_min and the configuration
+hash, and it serialises to strict JSON.
+
+The comparison ρ ≥ ρ_min is exact on floating-point values, with no tolerance
+(as in Eq 17). A ρ within rounding error of ρ_min can land on either side; for
+example 1.0 − 0.95 evaluates to 0.050000000000000044 and passes ρ_min = 0.05.
+ρ_min is the safety margin and should be chosen well above rounding error
+(audit L8, pinned by `test_rho_min_comparison_is_exact_floating_point`).
 
 **Binding (audit M3).** `ControlAction` copies its four mappings into read-only
 views at construction, so an action cannot change after it is verified. The
@@ -242,6 +252,10 @@ components; it is a regression check, not independent evidence.
 | D11 | Trajectory start | ŝ_t = s_t (Eq 12) | as written | intents are partly decided by the current measurement, independently of a_t |
 | D12 | Nominal-model validity domain | T̂ is assumed conservative; no validity domain | shield rejects (UNKNOWN) if any rollout step is outside T̂'s validity domain (`nominal_model_domain`) | an analytic queueing model's formulas break down near saturation; using them there would certify on meaningless numbers. Not the paper's Def 2 (which concerns W_ψ) |
 | D13 | Intents on unmodelled signals | not discussed | an intent may read a signal the nominal model does not predict (loss, flow-table occupancy) only at the current step; otherwise the shield refuses to start | over the rollout such a signal is a placeholder, so the intent would be vacuous (audit M5) |
+| D14 | Measurement validity | the state s_t is given | the shield rejects (UNKNOWN) if any state or demand metric it reads is missing, non-finite, out of bounds, stale or badly timestamped | the paper assumes s_t is known; a real controller's telemetry is not always usable |
+| D15 | Fallback outputs along the rollout | π₀ is assumed well defined | each π₀ output along the rollout must be in A (`fallback_continuation`), otherwise reject | detects a broken π₀ instead of crashing or using an invalid action |
+| D16 | Link-capacity constraint | "physical link capacities" | Σ reserved rate budgets on a link ≤ f_max · capacity; measured load is not used | meters police each slice to its budget (Milestone 2); ignores unmanaged traffic, see open finding H1 |
+| D17 | Predicate functions | any real-valued p_i(s, a) (Eq 5) | single-signal comparisons `x <= c` (p = c − x) and `x >= c` (p = x − c) | covers Eq 6 and the configured intents; sums or maxima of signals are not expressible yet |
 
 ## 7. Illustrative parameters
 

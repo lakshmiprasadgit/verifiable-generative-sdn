@@ -46,7 +46,7 @@ slices:
 # Physical plausibility bounds for measured state values (bounded S).
 # A measurement outside its range is treated as invalid, not clipped.
 state_bounds:
-  link_utilization: [0.0, 1.0]
+  link_utilization: [0.0, 1.0]   # real counters may read slightly above 1 (audit L5, revisit in Milestone 3)
   latency_p99_ms: [0.0, 10000.0]
   jitter_ms: [0.0, 10000.0]
   loss_rate: [0.0, 1.0]
