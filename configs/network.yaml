@@ -1,0 +1,62 @@
+# Stage 1 transport network: topology, slices, and the bounded sets S, D and A.
+#
+# All numbers are EXPERIMENTAL PARAMETERS chosen for a scaled-down software
+# emulation (Mininet/Open vSwitch on WSL2). They are not 6G standard values.
+
+control:
+  delta_t_s: 1.0            # duration of one control slot (paper Sec 2.1: slotted time)
+
+topology:
+  ingress: s1
+  egress: s5
+  switches: [s1, s2, s3, s4, s5, s6]
+  links:
+    # Path A: short, low delay, modest capacity
+    - {id: l12, a: s1, b: s2, capacity_mbps: 50,  prop_delay_ms: 0.1}
+    - {id: l25, a: s2, b: s5, capacity_mbps: 50,  prop_delay_ms: 0.1}
+    # Path B: high capacity, higher delay
+    - {id: l13, a: s1, b: s3, capacity_mbps: 200, prop_delay_ms: 5.0}
+    - {id: l35, a: s3, b: s5, capacity_mbps: 200, prop_delay_ms: 5.0}
+    # Path C: longer backup path
+    - {id: l14, a: s1, b: s4, capacity_mbps: 50,  prop_delay_ms: 2.0}
+    - {id: l46, a: s4, b: s6, capacity_mbps: 50,  prop_delay_ms: 2.0}
+    - {id: l65, a: s6, b: s5, capacity_mbps: 50,  prop_delay_ms: 2.0}
+  paths:
+    A: [s1, s2, s5]
+    B: [s1, s3, s5]
+    C: [s1, s4, s6, s5]
+  # Links whose on/off state is an action component ("link power states", Sec 2.1).
+  power_controllable_links: [l14, l46, l65]
+
+# Per-slice action bounds (the bounded action set A, Sec 2.1 / Assumption 4).
+slices:
+  urllc:
+    allowed_paths: [A, B, C]
+    rate_budget_mbps: [0.5, 10.0]
+    admission_limit: [1, 50]
+  embb:
+    allowed_paths: [A, B, C]
+    rate_budget_mbps: [1.0, 150.0]
+    admission_limit: [1, 20]
+  mmtc:
+    allowed_paths: [A, B, C]
+    rate_budget_mbps: [0.1, 10.0]
+    admission_limit: [1, 500]
+
+# Physical plausibility bounds for measured state values (bounded S).
+# A measurement outside its range is treated as invalid, not clipped.
+state_bounds:
+  link_utilization: [0.0, 1.0]
+  latency_p99_ms: [0.0, 10000.0]
+  jitter_ms: [0.0, 10000.0]
+  loss_rate: [0.0, 1.0]
+  throughput_mbps: [0.0, 10000.0]
+  queue_occupancy_pkts: [0.0, 1000000.0]
+  active_users: [0.0, 1000000.0]
+  flow_table_occupancy: [0.0, 1000000.0]
+  energy_w: [0.0, 1000000.0]
+
+# Bounds for measured exogenous inputs (bounded D).
+demand_bounds:
+  offered_load_mbps: [0.0, 10000.0]
+  active_devices: [0.0, 1000000.0]

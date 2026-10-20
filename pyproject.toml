@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vgcp"
+version = "0.1.0"
+description = "Verifiable Generative Control Plane for 6G SDN - Stage 1 (Mininet prototype)"
+requires-python = ">=3.12"
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+test = ["pytest==8.3.4", "hypothesis==6.122.3"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+markers = [
+    "mininet: needs root, Open vSwitch and Mininet (Milestone 2 onward)",
+]

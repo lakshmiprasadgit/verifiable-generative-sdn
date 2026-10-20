@@ -1,0 +1,38 @@
+# Verification shield settings (paper Sec 2.3) and the components its projected
+# rollout uses: nominal model T-hat, demand forecast d-bar, fallback pi_0 (Eqs 12-14).
+
+measurements:
+  # A measured value older than this (relative to the shield's current time) is
+  # stale and makes the safety status UNKNOWN -> reject. Two control slots.
+  max_staleness_s: 2.0
+
+# Out-of-distribution threshold eta (Def 2). The Milestone 1 analytical model reports
+# uncertainty 0 inside its validity domain and +inf outside, so any finite eta >= 0
+# rejects exactly the out-of-domain rollouts. Re-tune when a calibrated model exists.
+ood_threshold_eta: 0.5
+
+# Also require c(s-hat, a-hat) <= 0 at every rollout step k = 1..H.
+# Paper Eq 17 only requires k = 0; true is stricter.
+check_constraints_along_rollout: true
+
+demand_forecast:
+  type: conservative_constant   # d-bar_{t+k} = (1 + margin) * d_t
+  margin: 0.2
+
+nominal_model:
+  # Parameters are NOT calibrated against the emulated network yet (Milestone 3).
+  calibration_status: uncalibrated
+  mean_packet_size_bytes: {urllc: 64, embb: 1500, mmtc: 100}
+  processing_delay_ms_per_hop: 0.05
+  latency_safety_factor: 1.5
+  max_valid_utilization: 0.95
+  link_idle_power_w: 1.0
+  link_dynamic_power_w: 2.0
+
+# Static fallback action pi_0 (Eq 13). Must be in A (checked at load).
+# Assumption 3 (recursive feasibility) is NOT yet established; Milestone 4.
+fallback_action:
+  path: {urllc: A, embb: B, mmtc: C}
+  rate_budget_mbps: {urllc: 5.0, embb: 100.0, mmtc: 5.0}
+  admission_limit: {urllc: 50, embb: 20, mmtc: 500}
+  link_power: {l14: true, l46: true, l65: true}

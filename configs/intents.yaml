@@ -1,0 +1,40 @@
+# Operator intents Phi compiled to STL (paper Sec 2.2, Eq 7).
+#
+# Syntax: see src/vgcp/stl/parser.py. Time bounds are in control slots
+# (delta_t_s in network.yaml). Signals are state metric keys, or action
+# components prefixed with "action.".
+#
+# Thresholds are ILLUSTRATIVE experiment parameters for a scaled-down emulation.
+# The 1 ms URLLC bound mirrors the paper's example intent (Sec 2.2); it is not
+# presented as a 6G requirement. The paper's "99.999% reliability" part cannot be
+# expressed on a single trajectory and will be measured empirically later.
+
+# Rollout horizon H (Eq 14). Must cover the deepest formula (Assumption 1; see docs).
+horizon_H: 10
+
+# Global robustness margin rho_min > 0 (Eq 17), in the unit of each predicate's signal.
+rho_min: 0.005
+
+intents:
+  - name: urllc_latency
+    formula: "G[0,10](latency_p99_ms.urllc <= 1.0)"
+    # Per-intent override of rho_min (implementation extension; see docs):
+    # robustness here is in ms, so a 0.05 ms margin is required.
+    rho_min: 0.05
+    description: URLLC p99 latency stays at or below 1 ms over the horizon.
+
+  - name: embb_latency
+    formula: "G[0,10](latency_p99_ms.embb <= 40.0)"
+    rho_min: 1.0
+    description: eMBB p99 latency stays at or below 40 ms over the horizon.
+
+  - name: mmtc_loss
+    formula: "G[0,10](loss_rate.mmtc <= 0.02)"
+    description: mMTC packet loss stays at or below 2 % over the horizon.
+
+  # Example of a bounded-response intent (disabled): if URLLC latency exceeds
+  # 1 ms, it must recover within 3 slots. Required horizon = 7 + 3 = 10.
+  # ("not ok -> F ok" is written as "ok | F ok"; there is no '->' in the grammar.)
+  - name: urllc_recovery
+    enabled: false
+    formula: "G[0,7]( (latency_p99_ms.urllc <= 1.0) | F[0,3](latency_p99_ms.urllc <= 1.0) )"

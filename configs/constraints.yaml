@@ -1,0 +1,25 @@
+# Hard constraints c(s, a) <= 0 (paper Eq 16): "physical link capacities,
+# flow-table memory limits, and protocol invariants".
+#
+# Values are illustrative experiment parameters, not standards.
+# See src/vgcp/constraints.py for the exact definition of each component.
+
+link_capacity:
+  enabled: true
+  # Sum of rate budgets reserved on a link must not exceed this fraction of its capacity.
+  max_reserved_fraction: 0.9
+
+flow_table:
+  enabled: true
+  max_entries_per_switch: 1000
+  # Entries one slice's route installs on each switch it traverses. Counted on top
+  # of the current occupancy (make-before-break update: old and new rules coexist).
+  rules_per_slice_per_switch: 2
+
+slice_min_budget:
+  enabled: true
+  min_rate_budget_mbps: {urllc: 1.0, embb: 10.0, mmtc: 0.5}
+
+routing_validity:
+  # Protocol invariants: allowed path, loop-free, ingress-to-egress, powered-on links only.
+  enabled: true
