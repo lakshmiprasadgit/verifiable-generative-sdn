@@ -93,7 +93,8 @@ expand to the paper's definitions:
 `false = ¬⊤`. Formulas are written as text in `configs/intents.yaml`
 (grammar in `src/vgcp/stl/parser.py`).
 
-**Predicates** (Eq 5). `x <= c` has p = c − x and `x >= c` has p = x − c
+**Predicates** (Eq 5). `x <= c` has p = (c − x)/σ and `x >= c` has p = (x − c)/σ,
+where σ > 0 is the declared scale of the signal's family (D18; σ = 1 recovers Eq 6)
 (this matches Eq 6, p₁ = L_max − latency). The predicate holds iff p ≥ 0.
 Strict `<`, `>` are rejected because robustness cannot distinguish them.
 Signals are state metric keys and numeric action components prefixed with
@@ -242,7 +243,7 @@ components; it is a regression check, not independent evidence.
 | # | Topic | Paper | Implementation | Why |
 |---|---|---|---|---|
 | D1 | Horizon (Assumption 1) | H ≥ b_φ = largest right endpoint | Also requires H ≥ hrz(φ), the nested horizon (e.g. `G[0,5]F[0,3]` needs 8) | With nested operators, H ≥ b_φ does not make ρ well-defined, contrary to the paper's claim |
-| D2 | ρ_min | single global ρ_min | global ρ_min plus optional per-intent override | Predicates have different units (ms vs loss fraction); one margin cannot fit both |
+| D2 | ρ_min | single global ρ_min | **retired (audit M4)**: was a per-intent override; replaced by normalized predicates (D18) and one global ρ_min | per-intent overrides are now rejected as unknown keys |
 | D3 | Constraints along rollout | Eq 17 checks c only at (s_t, a_t) | Also checks k = 1..H (configurable, on by default) | Stricter; detects a π₀ continuation that violates c |
 | D4 | Shield inputs | V : S × A × Φ | also takes d_t and the current time | d̄ in Eq 12 needs measured demand; staleness needs a clock |
 | D5 | ρ of ⊤ | not stated | +∞ | standard; makes F = ⊤U behave as max |
@@ -258,6 +259,7 @@ components; it is a regression check, not independent evidence.
 | D15 | Fallback outputs along the rollout | π₀ is assumed well defined | each π₀ output along the rollout must be in A (`fallback_continuation`), otherwise reject | detects a broken π₀ instead of crashing or using an invalid action |
 | D16 | Link-capacity constraint | "physical link capacities" | Σ reserved rate budgets on a link + measured background load ≤ f_max · capacity | slice traffic is bounded by its budget (meters, Milestone 2); traffic outside the slices is measured as `background_load_mbps` = link rate − managed flow rates (audit H1). T̂ adds the background to utilization and holds it constant over the horizon, which is not conservative if it grows |
 | D17 | Predicate functions | any real-valued p_i(s, a) (Eq 5) | single-signal comparisons `x <= c` (p = c − x) and `x >= c` (p = x − c) | covers Eq 6 and the configured intents; sums or maxima of signals are not expressible yet |
+| D18 | Predicate normalization | p₁ = L_max − latency (Eq 6), in the signal's unit | p = (c − x)/scale with a declared scale per signal family (`intents.signal_scales`), so robustness is unitless | one ρ_min (Eq 17) and minima over intents (Eqs 27, 40) then compare like with like; positive scaling never changes satisfaction (audit M4) |
 
 ## 7. Illustrative parameters
 

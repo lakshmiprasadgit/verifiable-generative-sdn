@@ -38,8 +38,8 @@ def test_accepts_fallback_in_nominal_conditions(cfg, shield):
     assert [c.name for c in cert.checks] == ["action_valid", "state_measurements", "demand_measurements", *LATER_CHECKS]
     # urllc: measured 0.5 ms at k=0 (rho 0.5); predicted 0.59861 ms for k>=1 (rho 0.40139) -> min
     assert cert.robustness["urllc_latency"] == pytest.approx(1.0 - 0.598604, abs=1e-5)
-    # mmtc: measured and predicted loss 0 -> rho = 0.02 - 0 = 0.02
-    assert cert.robustness["mmtc_loss"] == pytest.approx(0.02)
+    # mmtc: measured loss 0 -> rho = (0.02 - 0) / scale 0.01 = 2.0 (unitless, M4)
+    assert cert.robustness["mmtc_loss"] == pytest.approx(2.0)
     assert cert.horizon_H == 10 and cert.config_hash == cfg.config_hash
 
 
@@ -236,8 +236,9 @@ def _shield_with_budget_intent(threshold):
     def mutate(raw):
         raw["intents"]["intents"] = [{
             "name": "embb_budget", "formula": f"G[0,10](action.rate_budget_mbps.embb >= {threshold})",
-            "rho_min": 0.5,
         }]
+        raw["intents"]["rho_min"] = 0.5
+        raw["intents"]["signal_scales"]["action.rate_budget_mbps"] = 1.0  # Mbit/s
     return VerificationShield.from_config(config_with(mutate))
 
 

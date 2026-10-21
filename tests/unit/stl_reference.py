@@ -14,9 +14,9 @@ from vgcp.stl.ast import And, Not, Predicate, Top, Until
 def rho(phi, x, t):
     if isinstance(phi, Top):
         return math.inf
-    if isinstance(phi, Predicate):  # Eq 8, with p = c - x for '<=' and x - c for '>=' (cf. Eq 6)
+    if isinstance(phi, Predicate):  # Eq 8, p = (c - x)/scale for '<=', (x - c)/scale for '>=' (Eq 6, D18)
         v = x[phi.signal][t]
-        return phi.threshold - v if phi.op == "<=" else v - phi.threshold
+        return (phi.threshold - v) / phi.scale if phi.op == "<=" else (v - phi.threshold) / phi.scale
     if isinstance(phi, Not):  # Eq 9
         return -rho(phi.child, x, t)
     if isinstance(phi, And):  # Eq 10

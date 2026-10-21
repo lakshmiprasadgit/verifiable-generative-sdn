@@ -23,12 +23,20 @@ def _yaml_dir(tmp_path, file, old, new):
 
 # ---------------------------------------------------------------- audit examples, through load_config
 def test_rho_min_typo_rejected(tmp_path):
-    d = _yaml_dir(tmp_path, "intents.yaml", "    rho_min: 0.05\n", "    rho_mn: 0.05\n")
+    # Global key misspelt: intents.rho_min -> rho_mn
+    d = _yaml_dir(tmp_path, "intents.yaml", "\nrho_min: 0.05\n", "\nrho_mn: 0.05\n")
     with pytest.raises(ConfigError) as exc:
         load_config(d)
     msg = str(exc.value)
-    assert "intents.intents[0]" in msg and "'rho_mn'" in msg
+    assert msg.startswith("intents: ") and "'rho_mn'" in msg
     assert "did you mean 'rho_min'" in msg
+
+
+def test_per_intent_key_typo_rejected(tmp_path):
+    d = _yaml_dir(tmp_path, "intents.yaml", "  - name: urllc_latency\n", "  - name: urllc_latency\n    rho_mn: 0.05\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config(d)
+    assert "intents.intents[0]" in str(exc.value) and "'rho_mn'" in str(exc.value)
 
 
 def test_enabled_typo_rejected(tmp_path):
@@ -128,11 +136,11 @@ def test_malformed_structural_values_rejected(mutate, where):
 def test_repository_config_values_match_yaml():
     cfg = load_config(CONFIG_DIR)
     data = yaml.safe_load((CONFIG_DIR / "intents.yaml").read_text())
-    assert cfg.rho_min == data["rho_min"] == 0.005
+    assert cfg.rho_min == data["rho_min"] == 0.05
     # Enabled flags and rho_min as written in the file; the disabled intent is excluded.
     assert [it.get("enabled", True) for it in data["intents"]] == [True, True, True, False]
     assert {i.name: i.rho_min for i in cfg.intents} == {
-        "urllc_latency": 0.05, "embb_latency": 1.0, "mmtc_loss": 0.005,
+        "urllc_latency": 0.05, "embb_latency": 0.05, "mmtc_loss": 0.05,
     }
     assert cfg.raw == raw_config()
 
@@ -154,10 +162,10 @@ def test_optional_keys_present_are_used():
     def mutate(raw):
         raw["intents"]["intents"] = [{
             "name": "x", "formula": "G[0,10](loss_rate.mmtc <= 0.02)",
-            "rho_min": 0.25, "enabled": True, "description": "d",
+            "enabled": True, "description": "d",
         }]
     (it,) = config_with(mutate).intents
-    assert (it.rho_min, it.description) == (0.25, "d")
+    assert (it.name, it.description) == ("x", "d")
 
 
 @pytest.mark.parametrize("family, section", [

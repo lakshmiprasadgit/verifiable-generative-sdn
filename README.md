@@ -87,6 +87,9 @@ An independent audit of Milestone 1 found issues; six are fixed:
 * **H1 (fixed)** - traffic outside the managed slices is measured per link
   (`background_load_mbps`) and counted by the capacity constraint and the nominal
   model. Milestone 2 must provide it (port rate minus managed flow rates).
+* **M4 (fixed)** - predicates are normalized by a declared scale per signal
+  family, so robustness is unitless and one global rho_min applies, as in Eq 17.
+  Per-intent margins are retired.
 * **M5 (fixed)** - an intent may not read, over the rollout, a signal the nominal
   model does not predict (loss, flow-table occupancy); the shield refuses such
   configurations. The mMTC loss intent is now a current-measurement check.
@@ -104,8 +107,6 @@ Unresolved:
 * **H3** - with intents evaluated from the measured state, the fallback policy is
   rejected whenever the current measurement already violates an intent, so the
   paper's recursive-feasibility assumption cannot hold in such states.
-* **M4** - robustness values in different units are compared through one
-  minimum; per-intent margins do not fix this for the paper's utility terms.
 
 Other limitations: the nominal model is uncalibrated and not shown to be
 conservative; the fallback policy's recursive feasibility is not checked; shield

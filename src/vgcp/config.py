@@ -24,7 +24,7 @@ from vgcp.errors import ConfigError, InvalidActionError, is_finite_real
 from vgcp.models.nominal import NominalModelParams
 from vgcp.signals import action_signal_names
 from vgcp.state import DEMAND_FAMILIES, STATE_FAMILIES, ObservationSchema
-from vgcp.stl import Formula, ParseError, Top, max_temporal_bound, parse, required_horizon, signals
+from vgcp.stl import Formula, ParseError, Top, max_temporal_bound, parse, required_horizon, signals, with_scales
 from vgcp.topology import Link, Topology
 
 CONFIG_FILES = ("network", "constraints", "intents", "shield")
@@ -132,6 +132,13 @@ def _bounds(section: Any, families: Mapping[str, Any], ctx: str) -> dict[str, tu
     return {f: _pair(section[f], f"{ctx}.{f}", _num) for f in families}
 
 
+def signal_family(signal: str) -> str:
+    """'latency_p99_ms.urllc' -> 'latency_p99_ms'; 'action.rate_budget_mbps.embb' ->
+    'action.rate_budget_mbps'; a global metric such as 'energy_w' is its own family."""
+    parts = signal.split(".")
+    return ".".join(parts[:2]) if parts[0] == "action" else parts[0]
+
+
 # ---------------------------------------------------------------- key schema
 # Structural schema of the configuration: which keys each fixed-schema mapping may
 # contain, and which values must be lists, name-keyed mappings or strings.
@@ -192,10 +199,10 @@ _SCHEMA = _Obj({
         "slot_duration_s": None,
         "horizon_H": None,
         "rho_min": None,
+        "signal_scales": None,  # family -> scale, validated in build_config (D18)
         "intents": _ListOf(_Obj({
             "name": _STR,
             "formula": _STR,
-            "rho_min": None,  # optional, default: global rho_min (D2)
             "enabled": None,  # optional, default true
             "description": _STR,  # optional, default ""
         })),
@@ -329,6 +336,14 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
     H = _int(_get(intents_raw, "horizon_H", "intents"), "intents.horizon_H", lo=1)
     rho_min = _num(_get(intents_raw, "rho_min", "intents"), "intents.rho_min", lo=0.0, lo_open=True)
     known_signals = set(state_schema.keys) | set(action_signal_names(action_schema))
+    families = {signal_family(s) for s in known_signals}
+    raw_scales = _get(intents_raw, "signal_scales", "intents")
+    if not isinstance(raw_scales, Mapping):
+        raise ConfigError("intents.signal_scales must map signal family -> scale")
+    unknown_families = sorted(set(raw_scales) - families)
+    if unknown_families:
+        raise ConfigError(f"intents.signal_scales: unknown signal family {unknown_families}; known: {sorted(families)}")
+    scales = {f: _num(v, f"intents.signal_scales.{f}", lo=0.0, lo_open=True) for f, v in raw_scales.items()}
     intents: list[Intent] = []
     seen = set()
     items = _get(intents_raw, "intents", "intents")
@@ -348,6 +363,13 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
         unknown = sorted(signals(phi) - known_signals)
         if unknown:
             raise ConfigError(f"intent '{name}': unknown signals {unknown}")
+        unscaled = sorted({signal_family(s) for s in signals(phi)} - set(scales))
+        if unscaled:
+            raise ConfigError(
+                f"intent '{name}': no scale for signal family {unscaled} in intents.signal_scales "
+                "(robustness is normalized per family, audit M4)"
+            )
+        phi = with_scales(phi, lambda sig: scales[signal_family(sig)])
         need, b_phi = required_horizon(phi), max_temporal_bound(phi)
         if need > H:
             raise ConfigError(
@@ -355,10 +377,9 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
                 f"{need} steps ahead (paper Assumption 1 asks H >= b_phi = {b_phi}; nested "
                 f"temporal operators need H >= {need}, see docs/milestone1_design.md)"
             )
-        own_rho = item.get("rho_min", rho_min)
-        own_rho = _num(own_rho, f"{ctx}.rho_min", lo=0.0, lo_open=True)
+        # One unitless rho_min for every intent (Eq 17); per-intent margins (D2) are retired.
         if _bool(item.get("enabled", True), f"{ctx}.enabled"):
-            intents.append(Intent(name, text, phi, own_rho, str(item.get("description", ""))))
+            intents.append(Intent(name, text, phi, rho_min, str(item.get("description", ""))))
     if not intents:
         # Paper Sec 2.2: "if no intents are active, Phi may be taken as {T}".
         intents.append(Intent("true", "true", Top(), rho_min, "Phi = {T}: no active intents"))

@@ -17,20 +17,23 @@ slot_duration_s: 1.0
 # Rollout horizon H (Eq 14). Must cover the deepest formula (Assumption 1; see docs).
 horizon_H: 10
 
-# Global robustness margin rho_min > 0 (Eq 17), in the unit of each predicate's signal.
-rho_min: 0.005
+# Robustness is unitless (audit M4): each predicate's margin is divided by its signal
+# family's scale below, so one global margin rho_min > 0 applies to every intent
+# (Eq 17). E.g. latency scale 1 ms and rho_min 0.05 require a 0.05 ms margin.
+rho_min: 0.05
+
+# Scale (unit) per signal family used in intents. Illustrative values.
+signal_scales:
+  latency_p99_ms: 1.0    # ms
+  loss_rate: 0.01        # fraction of packets (1 percentage point)
 
 intents:
   - name: urllc_latency
     formula: "G[0,10](latency_p99_ms.urllc <= 1.0)"
-    # Per-intent override of rho_min (implementation extension; see docs):
-    # robustness here is in ms, so a 0.05 ms margin is required.
-    rho_min: 0.05
     description: URLLC p99 latency stays at or below 1 ms over the horizon.
 
   - name: embb_latency
     formula: "G[0,10](latency_p99_ms.embb <= 40.0)"
-    rho_min: 1.0
     description: eMBB p99 latency stays at or below 40 ms over the horizon.
 
   - name: mmtc_loss

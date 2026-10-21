@@ -39,6 +39,7 @@ def test_nominal_model_declares_placeholder_outputs(cfg):
 def _with_intent(formula):
     def mutate(raw):
         raw["intents"]["intents"] = [{"name": "x", "formula": formula}]
+        raw["intents"]["signal_scales"]["flow_table_occupancy"] = 100.0  # entries
     return mutate
 
 
@@ -68,7 +69,7 @@ def test_measurement_only_loss_intent_uses_the_measured_value():
     cfg = config_with(_with_intent("loss_rate.mmtc <= 0.02"))
     shield = VerificationShield.from_config(cfg)
     ok = shield.verify(nominal_state(cfg), nominal_demand(), cfg.fallback_action, NOW)
-    assert ok.accepted and ok.robustness["x"] == 0.02
+    assert ok.accepted and ok.robustness["x"] == 2.0  # (0.02 - 0) / 0.01
     bad = shield.verify(nominal_state(cfg, **{"loss_rate.mmtc": 0.03}), nominal_demand(), cfg.fallback_action, NOW)
     assert not bad.accepted and bad.check("intent:x").status is CheckStatus.FAIL
 

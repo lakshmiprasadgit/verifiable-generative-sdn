@@ -68,8 +68,10 @@ def _budget_intent_config(raw):
     # One intent on an action signal (Eq 5 allows p(s, a)); its robustness does not
     # depend on the nominal model, so the expected values below are pure arithmetic.
     raw["intents"]["intents"] = [{
-        "name": "embb_budget", "formula": "G[0,10](action.rate_budget_mbps.embb >= 40.0)", "rho_min": 0.5,
+        "name": "embb_budget", "formula": "G[0,10](action.rate_budget_mbps.embb >= 40.0)",
     }]
+    raw["intents"]["rho_min"] = 0.5
+    raw["intents"]["signal_scales"]["action.rate_budget_mbps"] = 1.0  # Mbit/s
 
 
 # Fallback pi_0: urllc A @5, embb B @100, mmtc C @5; capacity limit 0.9 * C = 45 (A, C) / 180 (B).
@@ -162,11 +164,10 @@ def test_shield_is_sound_wrt_literal_eq17_on_grid(rollout_constraints):
     counts = {"both": 0, "neither": 0, "eq17_only": 0}
     for a in _grid(cfg):
         cert = shield.verify(s, d, a, NOW)
-        ref = in_eq17(cfg, s, d, a, rho_min_of=lambda it: it.rho_min)
-        # Paper-literal single rho_min (D2 overrides are stricter in this config).
-        ref_global = in_eq17(cfg, s, d, a, rho_min_of=lambda it: cfg.rho_min)
+        # One global rho_min, as in the paper's Eq 17 (per-intent margins retired, M4).
+        ref = in_eq17(cfg, s, d, a, rho_min_of=lambda it: cfg.rho_min)
         if cert.accepted:
-            assert ref and ref_global, a  # soundness: V = 1 => a in A_Phi(s)
+            assert ref, a  # soundness: V = 1 => a in A_Phi(s)
             counts["both"] += 1
         elif ref:
             failed = primary_failures(cert)

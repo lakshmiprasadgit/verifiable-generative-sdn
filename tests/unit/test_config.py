@@ -12,7 +12,7 @@ def test_repository_config_loads(cfg):
     assert cfg.horizon_H == 10
     assert cfg.delta_t_s == 1.0
     assert [i.name for i in cfg.intents] == ["urllc_latency", "embb_latency", "mmtc_loss"]  # disabled one excluded
-    assert {i.name: i.rho_min for i in cfg.intents} == {"urllc_latency": 0.05, "embb_latency": 1.0, "mmtc_loss": 0.005}
+    assert {i.name: i.rho_min for i in cfg.intents} == {"urllc_latency": 0.05, "embb_latency": 0.05, "mmtc_loss": 0.05}
     assert set(cfg.topology.paths) == {"A", "B", "C"}
     assert cfg.topology.paths["C"].links == ("l14", "l46", "l65")
     assert cfg.nominal_model.calibration_status == "uncalibrated"
@@ -62,14 +62,18 @@ def test_all_disabled_becomes_top():
 
 
 def test_action_signal_in_intent():
-    c = config_with(_intent("G[0,10](action.rate_budget_mbps.embb >= 50)"))
+    def mutate(raw):
+        _intent("G[0,10](action.rate_budget_mbps.embb >= 50)")(raw)
+        raw["intents"]["signal_scales"]["action.rate_budget_mbps"] = 1.0
+    c = config_with(mutate)
     assert c.intents[0].rho_min == c.rho_min
 
 
 @pytest.mark.parametrize("mutate, fragment", [
     (_intent("G[0,10](latency_p99_ms.nope <= 1)"), "unknown signals"),
     (_intent("G[0,10](latency_p99_ms.urllc < 1)"), "cannot parse"),
-    (_intent("G[0,10](latency_p99_ms.urllc <= 1)", rho_min=0), "must be > 0"),
+    # per-intent rho_min (D2) is retired: one global margin (M4)
+    (_intent("G[0,10](latency_p99_ms.urllc <= 1)", rho_min=0), "unknown key 'rho_min'"),
     (lambda r: r["intents"].update(rho_min=0.0), "must be > 0"),
     (lambda r: r["intents"].update(rho_min=-1), "must be > 0"),
     (lambda r: r["intents"].update(horizon_H=0), "must be >= 1"),

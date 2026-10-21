@@ -37,9 +37,12 @@ class Predicate(Formula):
     """Atomic predicate written ``signal <= c`` or ``signal >= c``.
 
     Its real-valued function (paper Eq 5) is
-        p(x) = c - x   for  x <= c      (cf. Eq 6: L_max - latency)
-        p(x) = x - c   for  x >= c
-    and the predicate holds iff p(x) >= 0.
+        p(x) = (c - x) / scale   for  x <= c      (cf. Eq 6: L_max - latency)
+        p(x) = (x - c) / scale   for  x >= c
+    and the predicate holds iff p(x) >= 0. ``scale`` > 0 is the signal family's
+    declared unit (configs/intents.yaml signal_scales), which makes robustness
+    unitless (audit M4, D18); it never changes whether the predicate holds.
+    The parser produces scale 1; config loading applies the declared scales.
     Strict comparisons are not provided: robustness cannot distinguish
     ``x < c`` from ``x <= c``.
     """
@@ -47,6 +50,7 @@ class Predicate(Formula):
     signal: str
     op: str
     threshold: float
+    scale: float = 1.0
 
     def __post_init__(self) -> None:
         if self.op not in ("<=", ">="):
@@ -55,9 +59,12 @@ class Predicate(Formula):
             raise ValueError(f"predicate threshold must be a finite number, got {self.threshold!r}")
         if not isinstance(self.signal, str) or not self.signal:
             raise ValueError("predicate signal name must be a non-empty string")
+        if not is_finite_real(self.scale) or self.scale <= 0:
+            raise ValueError(f"predicate scale must be a finite number > 0, got {self.scale!r}")
 
     def value(self, x: float) -> float:
-        return self.threshold - x if self.op == "<=" else x - self.threshold
+        margin = self.threshold - x if self.op == "<=" else x - self.threshold
+        return margin / self.scale
 
 
 @dataclass(frozen=True)
@@ -148,6 +155,21 @@ def required_horizon(phi: Formula) -> int:
     raise TypeError(f"not an STL formula: {phi!r}")
 
 
+def with_scales(phi: Formula, scale_of) -> Formula:
+    """Copy of phi with each predicate's scale set to scale_of(signal)."""
+    if isinstance(phi, Top):
+        return phi
+    if isinstance(phi, Predicate):
+        return Predicate(phi.signal, phi.op, phi.threshold, scale_of(phi.signal))
+    if isinstance(phi, Not):
+        return Not(with_scales(phi.child, scale_of))
+    if isinstance(phi, And):
+        return And(with_scales(phi.left, scale_of), with_scales(phi.right, scale_of))
+    if isinstance(phi, Until):
+        return Until(with_scales(phi.left, scale_of), with_scales(phi.right, scale_of), phi.a, phi.b)
+    raise TypeError(f"not an STL formula: {phi!r}")
+
+
 def signal_offsets(phi: Formula) -> dict[str, int]:
     """For each signal, the largest number of steps after the evaluation time at
     which rho_phi reads it (0 = only the current sample)."""
@@ -172,7 +194,8 @@ def to_text(phi: Formula) -> str:
     if isinstance(phi, Top):
         return "true"
     if isinstance(phi, Predicate):
-        return f"({phi.signal} {phi.op} {phi.threshold!r})"
+        scale = "" if phi.scale == 1.0 else f" /{phi.scale!r}"
+        return f"({phi.signal} {phi.op} {phi.threshold!r}{scale})"
     if isinstance(phi, Not):
         return f"!{to_text(phi.child)}"
     if isinstance(phi, And):
