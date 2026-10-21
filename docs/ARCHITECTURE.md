@@ -87,3 +87,14 @@ counter parsers         ──▶ telemetry: counters → measured state (backgr
 Per traffic class (each slice, plus background), proactive forward and reverse rules
 on every switch of its path; slices are metered at the ingress switch. Link power
 actions bring both ends of a link down with `mod-port`.
+
+Lifecycle invariants (added after the first Mininet run):
+* **Meters before flows.** An action is installed as meters first, then flows. The
+  backend refuses to send a flow that references a meter it has not created on that
+  switch.
+* **Whoever builds, releases on failure.** `MininetFabric.setup` and
+  `MininetNetwork.__init__` close a partially built network before re-raising, since
+  no caller holds a reference yet. `close()` is idempotent and exception-safe.
+* **No leaks across runs.** Setup removes the plan's own leftovers (interfaces,
+  bridges, harness processes); every integration test asserts none remain after
+  close.

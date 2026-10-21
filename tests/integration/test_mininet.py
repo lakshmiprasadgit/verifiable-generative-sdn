@@ -4,6 +4,11 @@ Without root (or without Mininet, OVS or iperf3) every test is skipped, never pa
 Tolerances are deliberately loose: these tests check that the emulation does what
 the telemetry and constraints assume (routes, policing, background accounting,
 probe latency), not precise performance.
+
+Every test ends with a leak check: none of the plan's switch interfaces or bridges may
+remain, and Mininet's own stop() must have removed them (no forced cleanup). The
+first privileged run failed because a failed setup leaked its network into every
+later test; scripts/mininet_run.sh runs this file twice to catch leaks across runs.
 """
 
 import os
@@ -53,19 +58,39 @@ def cfg():
 
 
 @pytest.fixture
-def make_net(cfg):
-    from vgcp.emu import MininetFabric, MininetNetwork
-    made = []
+def plan(cfg):
+    from vgcp.emu import plan_emulation
+    return plan_emulation(cfg)
 
-    def make(**extra):
+
+def _assert_no_leftovers(plan, fabrics):
+    from vgcp.emu.fabric import leftover_resources
+    assert leftover_resources(plan) == [], "network resources leaked"
+    assert [f.forced_cleanup for f in fabrics if f.forced_cleanup] == [], "Mininet stop() left resources behind"
+
+
+@pytest.fixture
+def make_net(cfg, plan):
+    from vgcp.emu import MininetFabric, MininetNetwork
+    made, fabrics = [], []
+
+    def make(fabric=None, **extra):
         sc = parse_scenario({**BASE, **extra}, {s.name for s in cfg.slices}, set(cfg.topology.links))
-        net = MininetNetwork(cfg, sc, 1, MininetFabric())
+        fabric = fabric or MininetFabric()
+        fabrics.append(fabric)  # registered before construction: a failed setup is checked too
+        net = MininetNetwork(cfg, sc, 1, fabric)
         made.append(net)
         return net
 
     yield make
+    errors = []
     for net in made:
-        net.close()
+        try:
+            net.close()
+        except Exception as e:  # close every network, then report
+            errors.append(e)
+    assert not errors, errors
+    _assert_no_leftovers(plan, fabrics)
 
 
 def _settle(net, slots=2):
@@ -121,12 +146,37 @@ def test_reroute_takes_effect_within_one_slot(make_net, cfg):
     assert m["link_util"]["l14"] > 0.4 and m["link_util"]["l13"] < 0.1
 
 
-def test_shielded_closed_loop_smoke(cfg):
+def test_shielded_closed_loop_smoke(cfg, plan):
     from vgcp.emu import MininetFabric, MininetNetwork
     from vgcp.experiments.runner import run_trial, summarize
     sc = parse_scenario({**BASE, "slots": 8}, {s.name for s in cfg.slices}, set(cfg.topology.links))
+    fabric = MininetFabric()
     rows = run_trial(cfg, sc, "shielded", 1, n_random=2,
-                     make_backend=lambda c, s, seed: MininetNetwork(c, s, seed, MininetFabric()))
+                     make_backend=lambda c, s, seed: MininetNetwork(c, s, seed, fabric))
+    _assert_no_leftovers(plan, [fabric])  # run_trial closed the backend
     summary = summarize(cfg, sc, rows)
     assert summary["apply_failures"] == 0
     assert all(r["truth_next"]["source"] == "measured" for r in rows)
+
+
+def test_meters_exist_on_the_ingress_only(make_net, cfg, plan):
+    from vgcp.emu.openflow import meter_id
+    net = make_net()
+    a = cfg.fallback_action
+    assert net.fabric.meters(plan.ingress) == {meter_id(a, s): round(a.rate_budget_mbps[s] * 1000) for s in a.path}
+    assert all(net.fabric.meters(sw) == {} for sw in plan.switches if sw != plan.ingress)
+
+
+def test_failed_setup_leaves_nothing_behind(make_net, cfg, plan):
+    from vgcp.emu import FabricError, MininetFabric
+    from vgcp.emu.fabric import leftover_resources
+
+    class FailsInstalling(MininetFabric):
+        def add_flows(self, switch, rules):
+            raise FabricError("injected after the topology was built")
+
+    with pytest.raises(FabricError, match="injected"):
+        make_net(fabric=FailsInstalling())
+    assert leftover_resources(plan) == []
+    obs = _settle(make_net(), 1)  # the same names can be built again straight away
+    assert obs.state.value("throughput_mbps.embb") > 0

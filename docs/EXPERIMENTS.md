@@ -174,13 +174,25 @@ the shielded controller with the static π₀, for the ablation.
 * The selection rule is "first certified", not the paper's Eq 42.
 * Thresholds and scales are illustrative, not 6G requirements.
 
-## Emulated network runs (Mininet) - not yet run
+## Emulated network runs (Mininet) - no results yet
 
-`sudo scripts/mininet_run.sh` runs the root-only integration tests (connectivity,
-routes, meter policing, background accounting, probe latency, reroute timing, a
-closed-loop smoke test) and, if they pass, a campaign of s1-s3 × 4 controllers ×
-3 seeds on the emulated network (about 40 minutes). Output goes to
-`experiments/results/mininet-<UTC>/`.
+`sudo scripts/mininet_run.sh` runs the root-only integration tests twice (connectivity,
+routes, meter placement and policing, background accounting, probe latency, reroute
+timing, cleanup after a failed setup, a closed-loop smoke test; each followed by a
+leak check). `sudo scripts/mininet_run.sh --campaign` then adds, only if every pass
+is green, a campaign of s1-s3 × 4 controllers × 3 seeds (about 40 minutes). Output
+goes to `experiments/results/mininet-<UTC>/`.
+
+**Run 1, 2026-10-21 17:10 UTC (`mininet-20261021T171037Z`): 7 of 7 integration tests
+failed; no campaign.** Environment: WSL2 kernel 6.6.87.2, Mininet 2.3.0, OVS 3.3.9,
+iperf3 3.16. The first test failed with `OFPMMFC_INVALID_METER` (flows installed
+before their meter). The other six failed with `RTNETLINK answers: File exists`,
+because the first test's half-built network was never closed. The many
+`sch_htb: quantum of class 50001 is big` lines are a benign tc warning (HTB quantum
+at ≥16 Mbit/s rates with the default r2q), not a failure. Root causes and fixes:
+[DECISIONS.md](DECISIONS.md), "Install order and lifecycle of the emulated network".
+These runs measure nothing about the controller; they only show the emulation was
+not yet usable.
 
 Differences from the simulator, by design of the emulation:
 * values are **measurements**, not ground truth (counters, ping probes);

@@ -63,6 +63,13 @@ class EmulationPlan:
     def dpid(self, switch: str) -> str:
         return f"{self.switches.index(switch) + 1:016x}"
 
+    def switch_interfaces(self) -> list[str]:
+        """Root-namespace interface names Mininet creates for this plan ({switch}-eth{port}).
+        Host-side interfaces live in the hosts' namespaces and vanish with their peers."""
+        names = [f"{l.a}-eth{l.port_a}" for l in self.links.values()] + [f"{l.b}-eth{l.port_b}" for l in self.links.values()]
+        names += [f"{h.switch}-eth{h.port}" for h in list(self.senders.values()) + list(self.receivers.values())]
+        return sorted(names)
+
 
 def plan_emulation(cfg: ProjectConfig) -> EmulationPlan:
     topo = cfg.topology

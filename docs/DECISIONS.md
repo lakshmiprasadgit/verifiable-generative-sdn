@@ -169,3 +169,61 @@ There is no ground truth in an emulated network; Mininet results are measurement
 
 **Uncertainty.** Ping shares the slice's queues but is ICMP, not the slice's own
 packets; RTT/2 assumes symmetric paths (true for these links).
+
+---
+
+## 2026-10-21 · Install order and lifecycle of the emulated network (first-run fixes)
+
+**Problem.** The first privileged run failed all 7 integration tests
+(`experiments/results/mininet-20261021T171037Z/integration.log`): s1 rejected the
+first slice flow with `OFPMMFC_INVALID_METER` (`actions=meter:1,output:2`), and every
+later test failed building the topology with `RTNETLINK answers: File exists` for
+`bgdst-eth0`/`s5-eth7`.
+
+**Root causes.** (1) `MininetNetwork._install` added a slice's flows and only then
+its meter. An OpenFlow 1.3 switch validates the meter reference when the flow is
+added. Meter *support* was not the problem: the error is "invalid meter", not "out of
+meters". (2) The exception escaped `MininetNetwork.__init__` after the topology was
+up. The fixture appended the network to its cleanup list only after construction
+returned, and `run_trial` likewise only gets a backend after construction, so
+nothing ever closed it. Mininet 2.3 creates veth pairs without deleting old ones of
+the same name, so the next build collided. The first collision is the bgdst link
+because Mininet builds links in sorted order. iperf3 servers started with `mnexec`
+kept the dead hosts' namespaces alive and were not removed by `mn -c`. (3) The
+fake fabric, the only thing the unit tests ran against, accepted flows with missing
+meters, so the order bug could not show up without root.
+
+**Alternatives.** For (1): bundle meters and flows in one OpenFlow bundle, or create
+meters first. For (2): clean up only in the test fixture, or make every layer
+release what it built.
+
+**Chosen.**
+* Meters are created first. The backend keeps a per-switch ledger of the meters it
+  created and refuses (`FabricError`) to send a flow that references a meter missing
+  on *that* switch.
+* Setup checks `meter-features` on the ingress and fails clearly if the datapath has
+  no meters.
+* `MininetNetwork.__init__` and `MininetFabric.setup` (building with `build=False` so
+  a half-built network is reachable) release everything on any failure.
+* `close()` is idempotent, stops every process (terminate, then kill), stops
+  Mininet, verifies nothing of the plan is left and deletes what is, collecting
+  errors instead of stopping at the first one.
+* Setup first deletes this plan's own leftovers: its `{switch}-eth{port}`
+  interfaces, its bridges, and its iperf3/ping processes in non-root namespaces.
+  These are matched by the plan's ports and addresses, so the system iperf3 service
+  and anything else are untouched.
+* If an iperf3 client dies, the snapshot fails instead of measuring a slot with
+  less traffic than intended.
+* The fake fabric rejects what OVS rejects (missing meter on flow add, adding an
+  existing meter, modifying a missing one).
+
+**Consequences.** A failure now surfaces as the first real error instead of a
+cascade of collisions. Integration tests end with a leak check and fail if Mininet's
+own `stop()` left anything (a forced cleanup is reported, not hidden).
+`scripts/mininet_run.sh` runs the suite twice without cleanup in between, and runs
+the campaign only on request.
+
+**Uncertainty.** Both fixes are verified only against the strict fake fabric and the
+OVS 3.3.9 output formats (`ovs-ofctl ofp-print`), not yet on real Mininet. The
+leftover removal assumes only one emulation runs at a time on the host, which is
+already required because the interface names are fixed.

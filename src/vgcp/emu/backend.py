@@ -26,9 +26,10 @@ from typing import Any, Callable
 
 from vgcp.action import ControlAction
 from vgcp.config import ProjectConfig
-from vgcp.emu.fabric import Fabric
+from vgcp.emu.fabric import Fabric, FabricError
 from vgcp.emu.openflow import (
     COOKIE_MASK,
+    FlowRule,
     action_rules,
     all_classes,
     background_rules,
@@ -61,17 +62,27 @@ class MininetNetwork:
         self._pending: deque[tuple[int, ControlAction]] = deque()
         self._meas: list[tuple[dict[str, float], dict[str, float], dict[str, Any]]] = []
         self._last_fresh = None
+        self._meters: dict[str, set[int]] = {}  # meters created on each switch (flows may reference only these)
         self.t = 0
-        self.fabric.setup(self.plan)
-        classes = all_classes(cfg.fallback_action)
-        if self.bg_path is not None:
-            for sw in self.paths[self.bg_path]:
-                self.fabric.add_flows(sw, [r for r in background_rules(self.plan, self.paths[self.bg_path], classes)
-                                           if r.switch == sw])
-        self._install(cfg.fallback_action, first=True)
-        self._start = self.clock()
-        self._snap = self.fabric.snapshot()
-        self._run_slot()  # slot 0 under pi_0
+        try:
+            self.fabric.setup(self.plan)
+            classes = all_classes(cfg.fallback_action)
+            if self.bg_path is not None:
+                for sw in self.paths[self.bg_path]:
+                    self._add_flows(sw, [r for r in background_rules(self.plan, self.paths[self.bg_path], classes)
+                                         if r.switch == sw])
+            self._install(cfg.fallback_action, first=True)
+            self._start = self.clock()
+            self._snap = self.fabric.snapshot()
+            self._run_slot()  # slot 0 under pi_0
+        except BaseException as e:
+            # nobody else holds a reference yet: release a partially built network here,
+            # or its interfaces and processes outlive the failure (first Mininet run)
+            try:
+                self.fabric.close()
+            except Exception as ce:
+                e.add_note(f"cleanup after the failed construction also failed: {ce}")
+            raise
 
     # ---------------------------------------------------------------- backend interface
     def observe(self) -> Observation:
@@ -120,10 +131,23 @@ class MininetNetwork:
             raise ConfigError("Mininet backend: background events on more than one path are not supported")
         return paths.pop() if paths else None
 
+    def _add_flows(self, switch: str, rules: list[FlowRule]) -> None:
+        """Install rules, refusing any that references a meter not yet created on that switch."""
+        missing = {m for r in rules if (m := r.meter) is not None} - self._meters.get(switch, set())
+        if missing:
+            raise FabricError(f"flows on {switch} reference meters {sorted(missing)} that do not exist there")
+        self.fabric.add_flows(switch, rules)
+
     def _install(self, action: ControlAction, first: bool = False) -> None:
         old = self.installed
         classes = all_classes(action)
         rules = action_rules(self.plan, self.paths, action)
+        # meters first: an OpenFlow switch rejects a flow whose meter does not exist yet
+        for s in slice_classes(action):
+            if first or old.rate_budget_mbps[s] != action.rate_budget_mbps[s]:
+                m = meter_id(action, s)
+                self.fabric.set_meter(self.topo.ingress, meter_spec(m, action.rate_budget_mbps[s]), new=first)
+                self._meters.setdefault(self.topo.ingress, set()).add(m)
         for s in slice_classes(action):
             if first or old.path[s] != action.path[s]:
                 ck = class_cookie(classes, s)
@@ -132,10 +156,7 @@ class MininetNetwork:
                         self.fabric.del_flows(sw, ck, COOKIE_MASK)
                     mine = [r for r in rules if r.switch == sw and r.cookie == ck]
                     if mine:
-                        self.fabric.add_flows(sw, mine)
-            if first or old.rate_budget_mbps[s] != action.rate_budget_mbps[s]:
-                self.fabric.set_meter(self.topo.ingress, meter_spec(meter_id(action, s), action.rate_budget_mbps[s]),
-                                      new=first)
+                        self._add_flows(sw, mine)
         for lid in self.topo.power_controllable_links:
             if first or old.link_power[lid] != action.link_power[lid]:
                 for sw, port in self.plan.link_ports(lid):

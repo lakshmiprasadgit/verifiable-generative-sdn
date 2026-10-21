@@ -1,9 +1,16 @@
-"""A fake Fabric: fluid-model counters consistent with installed rules (tests only)."""
+"""A fake Fabric: fluid-model counters consistent with installed rules (tests only).
+
+It enforces Open vSwitch's meter rules, so ordering bugs fail here and not first on
+a real switch: a flow referencing a meter that does not exist on that switch is
+rejected (OFPMMFC_INVALID_METER), as are adding an existing meter and modifying a
+missing one.
+"""
 
 from __future__ import annotations
 
 import re
 
+from vgcp.emu.fabric import FabricError
 from vgcp.emu.openflow import FlowCounters, PortCounters
 from vgcp.emu.plan import EmulationPlan
 from vgcp.emu.telemetry import Snapshot
@@ -21,8 +28,10 @@ class FakeClock:
 
 
 class FakeFabric:
-    def __init__(self, clock: FakeClock, lose_probes: set[str] | None = None) -> None:
-        self.clock, self.lose_probes = clock, lose_probes or set()
+    def __init__(self, clock: FakeClock, lose_probes: set[str] | None = None,
+                 fail_on: str | None = None) -> None:
+        self.clock, self.lose_probes, self.fail_on = clock, lose_probes or set(), fail_on
+        self.closed = 0
         self.rules: dict[str, list] = {}
         self.meters: dict[str, dict[int, float]] = {}
         self.ports_down: set[tuple[str, int]] = set()
@@ -33,12 +42,22 @@ class FakeFabric:
         self._last = 0.0
         self._probe: list[str] = []
 
+    def _maybe_fail(self, op):
+        if self.fail_on == op:
+            raise FabricError(f"injected failure in {op}")
+
     def setup(self, plan: EmulationPlan) -> None:
         self.plan = plan
         self.rules = {sw: [] for sw in plan.switches}
         self.calls.append(("setup",))
+        self._maybe_fail("setup")
 
     def add_flows(self, switch, rules):
+        self._maybe_fail("add_flows")
+        for r in rules:
+            m = re.search(r"meter:(\d+)", r.actions)
+            if m and int(m.group(1)) not in self.meters.get(switch, {}):
+                raise FabricError(f"ovs-ofctl add-flows {switch}: OFPMMFC_INVALID_METER ({r.text()})")
         self.rules[switch] += rules
         self.calls.append(("add_flows", switch, len(rules)))
 
@@ -49,6 +68,11 @@ class FakeFabric:
     def set_meter(self, switch, spec, new):
         m = int(re.search(r"meter=(\d+)", spec).group(1))
         kbps = int(re.search(r"rate=(\d+)", spec).group(1))
+        exists = m in self.meters.get(switch, {})
+        if new and exists:
+            raise FabricError(f"ovs-ofctl add-meter {switch}: OFPMMFC_METER_EXISTS")
+        if not new and not exists:
+            raise FabricError(f"ovs-ofctl mod-meter {switch}: OFPMMFC_UNKNOWN_METER")
         self.meters.setdefault(switch, {})[m] = kbps / 1000
         self.calls.append(("set_meter", switch, m, kbps / 1000, new))
 
@@ -119,4 +143,5 @@ class FakeFabric:
         return Snapshot(self.clock(), ports, flows, rtts)
 
     def close(self):
+        self.closed += 1
         self.calls.append(("close",))

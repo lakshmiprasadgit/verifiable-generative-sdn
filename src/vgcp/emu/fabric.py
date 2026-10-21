@@ -13,14 +13,17 @@ packet-in handling is needed; the Fabric boundary keeps a controller a drop-in.
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 from typing import Protocol
 
-from vgcp.emu.openflow import FlowRule, parse_dump_flows, parse_dump_ports
+from vgcp.emu.openflow import FlowRule, parse_dump_flows, parse_dump_meters, parse_dump_ports, parse_meter_features
 from vgcp.emu.plan import EmulationPlan
 from vgcp.emu.telemetry import Snapshot, parse_ping
 
@@ -41,6 +44,80 @@ class FabricError(RuntimeError):
     pass
 
 
+log = logging.getLogger(__name__)
+
+
+def is_emulation_process(argv: list[str], plan: EmulationPlan) -> bool:
+    """A traffic generator, iperf3 server or probe this fabric starts for the plan
+    (matched by program and the plan's receiver ports or addresses)."""
+    if not argv:
+        return False
+    prog, args = os.path.basename(argv[0]), set(argv[1:])
+    ports = {str(5201 + i) for i in range(len(plan.receivers))}
+    ips = {h.ip for h in plan.receivers.values()}
+    if prog == "iperf3":
+        return bool(ports & args) and ("-s" in args or bool(ips & args))
+    return prog == "ping" and bool(ips & args)
+
+
+def _emulation_processes(plan: EmulationPlan) -> list[int]:
+    """Live emulation processes outside the root network namespace (Mininet hosts).
+    mnexec execs the command, so `mn -c` (which kills mnexec) does not catch them, and
+    they keep a host's namespace alive after the network is gone (first run)."""
+    try:
+        root_ns = os.readlink("/proc/1/ns/net")
+    except OSError:
+        return []  # not root: cannot see other namespaces
+    pids = []
+    for d in os.listdir("/proc"):
+        if not d.isdigit() or int(d) == os.getpid():
+            continue
+        try:
+            argv = [a.decode(errors="replace") for a in Path(f"/proc/{d}/cmdline").read_bytes().split(b"\0") if a]
+            ns = os.readlink(f"/proc/{d}/ns/net")
+        except OSError:
+            continue  # exited meanwhile
+        if ns != root_ns and is_emulation_process(argv, plan):
+            pids.append(int(d))
+    return sorted(pids)
+
+
+def leftover_resources(plan: EmulationPlan) -> list[str]:
+    """This plan's switch-side interfaces, OVS bridges and host processes that still
+    exist (root only). Only what this plan creates is looked at; nothing else on the
+    host is touched (an iperf3 service in the root namespace, for example)."""
+    left = [f"intf:{n}" for n in plan.switch_interfaces() if os.path.exists(f"/sys/class/net/{n}")]
+    for sw in plan.switches:
+        if subprocess.run(["ovs-vsctl", "br-exists", sw], capture_output=True).returncode == 0:
+            left.append(f"bridge:{sw}")
+    left += [f"proc:{pid}" for pid in _emulation_processes(plan)]
+    return left
+
+
+def remove_resources(names: list[str]) -> None:
+    """Delete resources named as leftover_resources() reports them."""
+    for item in names:
+        kind, name = item.split(":", 1)
+        if kind == "proc":
+            try:
+                os.kill(int(name), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            continue
+        cmd = ["ip", "link", "del", name] if kind == "intf" else ["ovs-vsctl", "--if-exists", "del-br", name]
+        subprocess.run(cmd, capture_output=True)
+
+
+def _stop_process(proc) -> None:
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=3)
+
+
 class MininetFabric:
     """Real network: requires root, Mininet, Open vSwitch with the openvswitch kernel module, iperf3."""
 
@@ -55,6 +132,8 @@ class MininetFabric:
         self._traffic: dict[str, tuple[float, int, object]] = {}
         self._probes: dict[str, object] = {}
         self._servers: list[object] = []
+        self.stale_removed: list[str] = []  # leftovers of an earlier run, deleted before setup
+        self.forced_cleanup: list[str] = []  # what Mininet's own stop() left behind and close() deleted
 
     # ---------------------------------------------------------------- topology
     def setup(self, plan: EmulationPlan) -> None:
@@ -75,13 +154,32 @@ class MininetFabric:
                     self_inner.addLink(h.name, h.switch, port2=h.port, bw=1000)
 
         self.plan = plan
-        self.net = Mininet(topo=_Topo(), switch=OVSSwitch, link=TCLink, controller=None,
+        # a crashed earlier run (or the pre-fix code) can leave this plan's interfaces
+        # behind; Mininet does not delete them and fails with "RTNETLINK answers: File exists"
+        self.stale_removed = leftover_resources(plan)
+        if self.stale_removed:
+            log.warning("removing leftovers of an earlier run: %s", self.stale_removed)
+            remove_resources(self.stale_removed)
+        # build=False so that self.net exists, and can be stopped, if building fails half way
+        self.net = Mininet(topo=_Topo(), switch=OVSSwitch, link=TCLink, controller=None, build=False,
                            autoSetMacs=True, autoStaticArp=True, waitConnected=False)
-        self.net.start()
-        for i, h in enumerate(plan.receivers.values()):
-            self._servers.append(self.net.get(h.name).popen(
-                ["iperf3", "-s", "-p", str(5201 + i)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-        time.sleep(0.5)
+        try:
+            self.net.build()
+            self.net.start()
+            features = self._ofctl("meter-features", plan.ingress)
+            if not parse_meter_features(features):
+                raise FabricError(f"{plan.ingress} reports no OpenFlow meter support, so slice budgets cannot be "
+                                  f"policed:\n{features}")
+            for i, h in enumerate(plan.receivers.values()):
+                self._servers.append(self.net.get(h.name).popen(
+                    ["iperf3", "-s", "-p", str(5201 + i)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            time.sleep(0.5)
+        except BaseException as e:
+            try:
+                self.close()
+            except Exception as ce:
+                e.add_note(f"cleanup after the failed setup also failed: {ce}")
+            raise
 
     # ---------------------------------------------------------------- OpenFlow
     def _ofctl(self, *args: str) -> str:
@@ -107,6 +205,10 @@ class MininetFabric:
 
     def set_port(self, switch: str, port: int, up: bool) -> None:
         self._ofctl("mod-port", switch, str(port), "up" if up else "down")
+
+    def meters(self, switch: str) -> dict[int, int | None]:
+        """Meters that exist on a switch -> drop rate in kbps (for tests and diagnostics)."""
+        return parse_dump_meters(self._ofctl("dump-meters", switch))
 
     # ---------------------------------------------------------------- traffic and probes
     def set_traffic(self, cls: str, mbps: float, packet_bytes: int) -> None:
@@ -149,6 +251,9 @@ class MininetFabric:
 
     def snapshot(self) -> Snapshot:
         assert self.plan is not None
+        dead = sorted(cls for cls, (_, _, proc) in self._traffic.items() if proc.poll() is not None)
+        if dead:  # otherwise the slot would be measured with less traffic than was set
+            raise FabricError(f"traffic generator (iperf3 client) exited for {dead}")
         rtts = self._collect_probes()
         t = time.monotonic()
         ports = {sw: parse_dump_ports(self._ofctl("dump-ports", sw)) for sw in self.plan.switches}
@@ -156,9 +261,30 @@ class MininetFabric:
         return Snapshot(t, ports, flows, rtts)
 
     def close(self) -> None:
-        for _, _, proc in self._traffic.values():
-            proc.terminate()
-        for proc in list(self._probes.values()) + self._servers:
-            proc.terminate()
-        if self.net is not None:
-            self.net.stop()
+        """Release everything, also after a partial setup. Idempotent; every step runs even
+        if an earlier one fails, and the failures are raised together at the end."""
+        errors = []
+        procs = [proc for _, _, proc in self._traffic.values()] + list(self._probes.values()) + self._servers
+        self._traffic, self._probes, self._servers = {}, {}, []
+        for proc in procs:
+            try:
+                _stop_process(proc)
+            except Exception as e:
+                errors.append(f"stopping pid {getattr(proc, 'pid', '?')}: {e!r}")
+        net, self.net = self.net, None
+        if net is not None:
+            try:
+                net.stop()
+            except Exception as e:
+                errors.append(f"mininet stop: {e!r}")
+        if self.plan is not None:
+            left = leftover_resources(self.plan)
+            if left:
+                log.warning("Mininet stop left %s behind; deleting", left)
+                self.forced_cleanup += left
+                remove_resources(left)
+                still = leftover_resources(self.plan)
+                if still:
+                    errors.append(f"could not delete {still}")
+        if errors:
+            raise FabricError("; ".join(errors))

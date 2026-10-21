@@ -37,6 +37,11 @@ class FlowRule:
     def text(self) -> str:
         return f"cookie={self.cookie:#x},priority={self.priority},{self.match},actions={self.actions}"
 
+    @property
+    def meter(self) -> int | None:
+        m = re.match(r"meter:(\d+)", self.actions)
+        return int(m.group(1)) if m else None
+
 
 def path_rules(plan: EmulationPlan, cls: str, nodes: tuple[str, ...], cookie: int, priority: int,
                meter_id: int | None) -> list[FlowRule]:
@@ -153,3 +158,21 @@ def parse_dump_flows(text: str) -> list[FlowCounters]:
             out_port=int(out.group(1)) if out else None,
         ))
     return flows
+
+
+_METER = re.compile(r"meter=(\d+)(.*?)(?=meter=\d+|\Z)", re.S)
+
+
+def parse_dump_meters(text: str) -> dict[int, int | None]:
+    """`ovs-ofctl -O OpenFlow13 dump-meters SWITCH` -> drop-band rate (kbps) per meter id."""
+    out: dict[int, int | None] = {}
+    for m in _METER.finditer(text):
+        rate = re.search(r"rate=(\d+)", m.group(2))
+        out[int(m.group(1))] = int(rate.group(1)) if rate else None
+    return out
+
+
+def parse_meter_features(text: str) -> int | None:
+    """`ovs-ofctl -O OpenFlow13 meter-features SWITCH` -> max_meter (0 = no meter support)."""
+    m = re.search(r"max_meter:(\d+)", text)
+    return int(m.group(1)) if m else None

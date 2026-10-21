@@ -9,16 +9,21 @@ import pytest
 from factories import action_with, config_with
 from fake_fabric import FakeClock, FakeFabric
 from test_sim import BASE
-from vgcp.emu import MininetNetwork, plan_emulation
+from vgcp.emu import FabricError, MininetFabric, MininetNetwork, plan_emulation
+from vgcp.emu import fabric as fabric_mod
 from vgcp.emu.openflow import (
     COOKIE_MASK,
     action_rules,
     all_classes,
     background_rules,
     class_cookie,
+    FlowRule,
+    meter_id,
     meter_spec,
     parse_dump_flows,
+    parse_dump_meters,
     parse_dump_ports,
+    parse_meter_features,
 )
 from vgcp.emu.telemetry import Snapshot, link_measurements, parse_ping, slice_measurements
 from vgcp.emu.openflow import FlowCounters, PortCounters
@@ -246,3 +251,200 @@ def test_closed_loop_trial_runs_on_the_emulation_backend(cfg):
     assert len(rows) == 6 and all(r["truth_next"]["source"] == "measured" for r in rows)
     s = summarize(cfg, sc, rows)
     assert s["slots"] == 6 and s["apply_failures"] == 0
+
+
+
+# ---------------------------------------------------------------- first Mininet run (2026-10-21) regressions
+# Failure 1: s1 rejected "actions=meter:1,output:2" with OFPMMFC_INVALID_METER because the
+# flows of a slice were installed before its meter. The fake fabric now rejects that too.
+def test_meters_exist_before_any_flow_that_references_them(cfg):
+    _, fabric, _ = _net(cfg)
+    first_flow = next(i for i, c in enumerate(fabric.calls) if c[0] == "add_flows")
+    meter_calls = [i for i, c in enumerate(fabric.calls) if c[0] == "set_meter"]
+    assert len(meter_calls) == 3 and max(meter_calls) < first_flow
+    assert fabric.meters == {"s1": {meter_id(cfg.fallback_action, s): cfg.fallback_action.rate_budget_mbps[s]
+                                    for s in ("urllc", "embb", "mmtc")}}
+
+
+def test_backend_refuses_flows_whose_meter_is_missing_on_that_switch(cfg):
+    net, fabric, _ = _net(cfg)
+    n = len(fabric.calls)
+    rule = FlowRule("s2", 0x100, 100, "ip,nw_src=10.0.2.1,nw_dst=10.0.2.2", "meter:1,output:1")
+    assert rule.meter == 1 and FlowRule("s2", 0x100, 100, "ip", "output:1").meter is None
+    with pytest.raises(FabricError, match=r"s2 reference meters \[1\]"):
+        net._add_flows("s2", [rule])  # meter 1 exists on s1 only
+    assert len(fabric.calls) == n  # never sent to the switch
+
+
+def test_fake_fabric_rejects_meter_misuse_like_ovs(cfg, plan):
+    f = FakeFabric(FakeClock())
+    f.setup(plan)
+    with pytest.raises(FabricError, match="UNKNOWN_METER"):
+        f.set_meter("s1", meter_spec(1, 5.0), new=False)
+    f.set_meter("s1", meter_spec(1, 5.0), new=True)
+    with pytest.raises(FabricError, match="METER_EXISTS"):
+        f.set_meter("s1", meter_spec(1, 5.0), new=True)
+
+
+# Failure 2: the failed constructor never closed its network (the test fixture had no
+# reference to it), so every later setup hit "RTNETLINK answers: File exists".
+@pytest.mark.parametrize("where", ["setup", "add_flows"])
+def test_failed_construction_closes_the_fabric(cfg, where):
+    fabric = FakeFabric(FakeClock(), fail_on=where)
+    with pytest.raises(FabricError, match="injected"):
+        MininetNetwork(cfg, _scenario(cfg), 1, fabric, clock=fabric.clock, sleep=fabric.clock.sleep)
+    assert fabric.closed == 1
+
+
+def test_a_failing_cleanup_does_not_hide_the_original_error(cfg):
+    fabric = FakeFabric(FakeClock(), fail_on="add_flows")
+
+    def broken_close():
+        raise FabricError("close failed too")
+    fabric.close = broken_close
+    with pytest.raises(FabricError, match="injected") as exc:
+        MininetNetwork(cfg, _scenario(cfg), 1, fabric, clock=fabric.clock, sleep=fabric.clock.sleep)
+    assert any("close failed too" in n for n in exc.value.__notes__)
+
+
+def test_plan_lists_the_switch_side_interfaces_mininet_creates(cfg, plan):
+    names = plan.switch_interfaces()
+    assert len(names) == len(set(names)) == 2 * len(plan.links) + 2 * len(plan.senders)
+    assert "s5-eth7" in names  # bgdst's switch port: the interface that collided in the first run
+    assert plan.receivers["bg"].switch == "s5" and plan.receivers["bg"].port == 7
+
+
+def test_leak_check_matches_only_this_harness_processes(plan):
+    ours = fabric_mod.is_emulation_process
+    assert ours(["iperf3", "-s", "-p", "5201"], plan)  # what survived the first run
+    assert ours(["iperf3", "-c", "10.0.2.2", "-u", "-b", "80.000M", "-l", "1400", "-t", "86400", "-p", "5202"], plan)
+    assert ours(["ping", "-n", "-c", "8", "-i", "0.1", "-W", "1", "10.0.1.2"], plan)
+    assert not ours(["/usr/bin/iperf3", "--server", "--interval", "0"], plan)  # the system iperf3 service
+    assert not ours(["iperf3", "-s", "-p", "5300"], plan)
+    assert not ours(["ping", "8.8.8.8"], plan) and not ours([], plan)
+
+
+# ---------------------------------------------------------------- MininetFabric lifecycle without root
+class _Proc:
+    def __init__(self, alive=True, fail=False):
+        self.alive, self.fail, self.pid, self.stopped = alive, fail, 4242, False
+
+    def poll(self):
+        return None if self.alive else 0
+
+    def terminate(self):
+        if self.fail:
+            raise OSError("terminate failed")
+        self.alive, self.stopped = False, True
+
+    def kill(self):
+        self.alive = False
+
+    def wait(self, timeout=None):
+        return 0
+
+
+class _Net:
+    def __init__(self, fail_build=False, fail_stop=False, **kwargs):
+        self.kwargs, self.fail_build, self.fail_stop, self.stopped = kwargs, fail_build, fail_stop, 0
+
+    def build(self):
+        if self.fail_build:
+            raise Exception("Error creating interface pair (bgdst-eth0,s5-eth7): RTNETLINK answers: File exists")
+
+    def start(self):
+        pass
+
+    def stop(self):
+        self.stopped += 1
+        if self.fail_stop:
+            raise RuntimeError("stop failed")
+
+
+@pytest.fixture
+def bare_fabric(monkeypatch, plan):
+    """A MininetFabric without the root check, with resource probing recorded, not run."""
+    left, removed = [], []
+    monkeypatch.setattr(fabric_mod, "leftover_resources", lambda p: list(left))
+    monkeypatch.setattr(fabric_mod, "remove_resources", lambda names: (removed.extend(names), left.clear()))
+    f = object.__new__(MininetFabric)
+    f.net, f.plan = None, plan
+    f._traffic, f._probes, f._servers = {}, {}, []
+    f.stale_removed, f.forced_cleanup = [], []
+    return f, left, removed
+
+
+def test_close_runs_every_step_and_is_idempotent(bare_fabric):
+    f, left, removed = bare_fabric
+    bad, good, server = _Proc(fail=True), _Proc(), _Proc()
+    net = _Net(fail_stop=True)
+    f._traffic, f._servers, f.net = {"embb": (80.0, 1400, bad), "urllc": (2.0, 64, good)}, [server], net
+    left.append("intf:s5-eth7")  # what a failed stop leaves behind
+    with pytest.raises(FabricError, match="terminate failed.*mininet stop"):
+        f.close()
+    assert good.stopped and server.stopped and net.stopped == 1  # a failure did not skip later steps
+    assert removed == ["intf:s5-eth7"] and f.forced_cleanup == ["intf:s5-eth7"]
+    f.close()  # nothing left: a second close is a no-op
+    assert net.stopped == 1
+
+
+def test_setup_failure_stops_the_partial_network(bare_fabric, monkeypatch, plan):
+    pytest.importorskip("mininet.net")
+    f, left, removed = bare_fabric
+    made = []
+    monkeypatch.setattr("mininet.net.Mininet", lambda **kw: made.append(_Net(fail_build=True, **kw)) or made[-1])
+    left.append("intf:s5-eth7")  # leaked by an earlier run
+    with pytest.raises(Exception, match="File exists"):
+        f.setup(plan)
+    assert f.stale_removed == ["intf:s5-eth7"] and removed == ["intf:s5-eth7"]  # deleted before building
+    assert made[0].kwargs["build"] is False and made[0].stopped == 1 and f.net is None
+
+
+def test_snapshot_refuses_a_dead_traffic_generator(bare_fabric):
+    f, _, _ = bare_fabric
+    f._traffic = {"embb": (80.0, 1400, _Proc(alive=False))}
+    with pytest.raises(FabricError, match=r"exited for \['embb'\]"):
+        f.snapshot()
+
+
+# ---------------------------------------------------------------- meter parsers (formats from OVS 3.3 ofp-print)
+METER_FEATURES = """OFPST_METER_FEATURES reply (OF1.3) (xid=0x2):
+max_meter:200000 max_bands:1 max_color:0
+band_types: drop
+capabilities: kbps pktps burst stats
+"""
+
+DUMP_METERS = """OFPST_METER_CONFIG reply (OF1.3) (xid=0x2):
+meter=1 kbps burst bands=
+type=drop rate=100000 burst_size=10000
+
+meter=3 kbps burst bands=
+type=drop rate=5000 burst_size=500
+"""
+
+
+def test_parse_meter_features_and_dump_meters():
+    assert parse_meter_features(METER_FEATURES) == 200000
+    assert parse_meter_features("max_meter:0 max_bands:0") == 0
+    assert parse_meter_features("garbage") is None
+    assert parse_dump_meters(DUMP_METERS) == {1: 100000, 3: 5000}
+    assert parse_dump_meters("OFPST_METER_CONFIG reply (OF1.3) (xid=0x2):\n") == {}
+
+
+@pytest.mark.skipif(shutil.which("ovs-ofctl") is None, reason="ovs-ofctl not installed")
+def test_meter_parsers_read_what_ovs_prints():
+    import struct
+
+    def reply(mtype, body):
+        payload = struct.pack("!HH4x", mtype, 0) + body
+        return (struct.pack("!BBHI", 4, 19, 8 + len(payload), 2) + payload).hex()
+
+    def meter(mid, kbps):
+        band = struct.pack("!HHII4x", 1, 16, kbps, kbps // 10)
+        return struct.pack("!HHI", 8 + len(band), 0b101, mid) + band
+
+    def show(hexmsg):
+        return subprocess.run(["ovs-ofctl", "ofp-print", hexmsg], capture_output=True, text=True, check=True).stdout
+
+    assert parse_meter_features(show(reply(11, struct.pack("!IIIBB2x", 64, 2, 0xF, 1, 0)))) == 64
+    assert parse_dump_meters(show(reply(10, meter(1, 100000) + meter(2, 5000)))) == {1: 100000, 2: 5000}
