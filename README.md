@@ -15,8 +15,8 @@ production-readiness or real-network safety claims.
 
 | Milestone | Content | Status |
 |---|---|---|
-| 1 | state/action schemas, hard constraints, STL robustness, verification shield | implemented with unit tests; audit findings open (see below) |
-| 2 | Mininet topology, SDN controller | not started |
+| 1 | state/action schemas, hard constraints, STL robustness, verification shield | done; all audit findings addressed (see below) |
+| 2 | closed loop, simulated and Mininet backends, experiments | in progress (see docs/STATUS.md) |
 | 3 | traffic, telemetry, nominal-model calibration | not started |
 | 4 | fallback, heuristic candidates, selection, closed loop | not started |
 | 5 | experiments, metrics, reports | not started |
@@ -59,7 +59,14 @@ the same examples. To search with fresh random examples instead:
 HYPOTHESIS_PROFILE=explore scripts/run_unit_tests.sh
 ```
 
-Current status and open decisions: [docs/STATUS.md](docs/STATUS.md).
+Current status: [docs/STATUS.md](docs/STATUS.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Decisions: [docs/DECISIONS.md](docs/DECISIONS.md). Experiments and results: [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md).
+
+Closed-loop experiments (simulated network, no root):
+
+```bash
+scripts/run_experiments.sh --scenarios experiments/scenarios/s*.yaml --seeds 1-5
+```
 
 Read first: [docs/milestone1_design.md](docs/milestone1_design.md) and
 [docs/traceability.md](docs/traceability.md).
