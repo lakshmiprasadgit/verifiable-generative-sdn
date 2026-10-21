@@ -47,6 +47,11 @@ def test_without_background_measurement_it_is_static(cfg):
     assert _policy(cfg).act(nominal_state(cfg, **{f"{BG}.l13": None})) == cfg.fallback_action
 
 
+def test_shipped_default_is_capacity_aware(cfg):
+    # chosen on the 2026-10-21 ablation (docs/EXPERIMENTS.md, docs/DECISIONS.md)
+    assert cfg.shield.fallback_policy == "capacity_aware"
+
+
 def test_config_selects_the_policy():
     c = config_with(lambda r: r["shield"].update(fallback_policy="capacity_aware"))
     assert isinstance(fallback_policy(c), CapacityAwareFallbackPolicy)
@@ -59,7 +64,7 @@ def test_capacity_aware_continuation_makes_a_fitting_candidate_certifiable():
     # along the rollout, so no candidate can be certified. With pi_0(s) the continuation
     # fits, and a candidate that fits is certified.
     fitted = lambda c: action_with(c, rate_budget_mbps={"embb": 60.0})
-    static = config_with(None)
+    static = config_with(lambda r: r["shield"].update(fallback_policy="static"))
     aware = config_with(lambda r: r["shield"].update(fallback_policy="capacity_aware"))
     for c, expected in ((static, False), (aware, True)):
         s = _bg_on_b(c, 120.0)

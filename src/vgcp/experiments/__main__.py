@@ -41,6 +41,13 @@ def _git(*args: str) -> str:
         return "unknown"
 
 
+def _rel(path: str) -> str:
+    try:
+        return str(Path(path).relative_to(ROOT))
+    except ValueError:
+        return Path(path).name
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m vgcp.experiments")
     ap.add_argument("--config", default=str(ROOT / "configs"))
@@ -64,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=False)
     manifest = {
-        "command": [sys.executable, "-m", "vgcp.experiments", *(argv if argv is not None else sys.argv[1:])],
+        # paths relative to the repository, so manifests carry no machine-specific prefix
+        "command": [_rel(sys.executable), "-m", "vgcp.experiments", *(argv if argv is not None else sys.argv[1:])],
         "started_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "git_commit": _git("rev-parse", "HEAD"),
         # dirty if any code, configuration or scenario differs from the commit, untracked files included

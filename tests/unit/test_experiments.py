@@ -61,6 +61,7 @@ def test_cli_writes_manifest_raw_steps_and_summaries(tmp_path):
                  "--modes", "shielded", "unshielded", "--n-random", "1", "--out", str(out)]) == 0
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["backend"] == "simulated" and manifest["seeds"] == [1, 2] and len(manifest["git_commit"]) >= 7
+    assert not manifest["command"][0].startswith("/")  # no machine-specific absolute path
     steps = (out / "tiny" / "shielded" / "seed-2" / "steps.jsonl").read_text().splitlines()
     assert len(steps) == 3 and json.loads(steps[0])["step"]["mode"] == "shielded"
     table = json.loads((out / "summary.json").read_text())

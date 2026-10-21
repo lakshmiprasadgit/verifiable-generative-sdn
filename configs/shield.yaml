@@ -27,7 +27,7 @@ nominal_model:
 # Fallback policy pi_0 (Eq 13): "static" applies fallback_action in every state;
 # "capacity_aware" starts from it and moves/shrinks the eMBB reservation to fit the
 # measured background load. See src/vgcp/models/fallback.py and docs/DECISIONS.md.
-fallback_policy: static
+fallback_policy: capacity_aware
 
 # Base fallback action (the static pi_0). Must be in A (checked at load).
 # Assumption 3 (recursive feasibility) is NOT yet established; Milestone 4.
