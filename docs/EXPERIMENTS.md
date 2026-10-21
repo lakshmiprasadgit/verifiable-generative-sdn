@@ -174,7 +174,7 @@ the shielded controller with the static π₀, for the ablation.
 * The selection rule is "first certified", not the paper's Eq 42.
 * Thresholds and scales are illustrative, not 6G requirements.
 
-## Emulated network runs (Mininet) - no results yet
+## Emulated network runs (Mininet) - integration green, campaign not run
 
 `sudo scripts/mininet_run.sh` runs the root-only integration tests twice (connectivity,
 routes, meter placement and policing, background accounting, probe latency, reroute
@@ -193,6 +193,17 @@ at ≥16 Mbit/s rates with the default r2q), not a failure. Root causes and fixe
 [DECISIONS.md](DECISIONS.md), "Install order and lifecycle of the emulated network".
 These runs measure nothing about the controller; they only show the emulation was
 not yet usable.
+
+**Run 2, 2026-10-21 17:22 UTC (`mininet-20261021T172242Z`), commit `692ba3b`,
+clean tree, same environment: 9 of 9 integration tests passed in both passes**
+(69.73 s and 69.44 s, no cleanup in between): every slice reaches its receiver,
+routes follow the installed path, meters police the budget, background is measured
+and slices excluded, probe latency matches link delays, reroute within one slot,
+meters exist on the ingress only, a failed setup leaves nothing behind, and a
+shielded closed-loop smoke test (8 slots). After the last pass, 0 switch interfaces
+and 0 harness iperf3 processes remained. Campaign not requested; **no campaign
+results exist**. The tests' tolerances are loose (e.g. ±20 % on policing, ±15 % on
+background), so this validates the plumbing, not measurement precision.
 
 Differences from the simulator, by design of the emulation:
 * values are **measurements**, not ground truth (counters, ping probes);

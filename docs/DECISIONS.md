@@ -223,7 +223,8 @@ own `stop()` left anything (a forced cleanup is reported, not hidden).
 `scripts/mininet_run.sh` runs the suite twice without cleanup in between, and runs
 the campaign only on request.
 
-**Uncertainty.** Both fixes are verified only against the strict fake fabric and the
-OVS 3.3.9 output formats (`ovs-ofctl ofp-print`), not yet on real Mininet. The
+**Uncertainty.** Verified on real Mininet on 2026-10-21 (`mininet-20261021T172242Z`):
+9/9 integration tests in two consecutive passes, nothing left behind. Still
+untested: an iperf3 client restart racing its server (it would now fail loudly). The
 leftover removal assumes only one emulation runs at a time on the host, which is
 already required because the interface names are fixed.

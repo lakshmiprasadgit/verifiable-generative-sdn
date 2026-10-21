@@ -7,14 +7,15 @@ claim about the safety of a real network.
 
 **Milestone 2 in progress.** The closed control loop runs end to end against a
 *simulated* network. The Mininet / Open vSwitch backend is implemented and
-unit-tested without root. Its **first privileged run (2026-10-21 17:10 UTC) failed
-all 7 integration tests**; both causes are found and fixed (below), but the fixes
-have **not yet been confirmed on a real Mininet network**. No Mininet results exist.
+unit-tested without root. Its first privileged run failed all 7 integration tests;
+after the fixes (below, commit `692ba3b`) the **9 integration tests passed on real
+Mininet in two consecutive passes** (2026-10-21 17:22 UTC). The Mininet experiment
+campaign **has not run**, so there are no Mininet controller results yet.
 
 | Milestone | Scope | Status |
 |---|---|---|
 | 1 | state/action schemas, constraints, STL robustness, verification shield | done; all audit findings addressed |
-| 2 | closed loop, network backends, telemetry, experiments | **in progress**: loop, simulated backend, experiments done; Mininet backend: first root run failed, fixes awaiting a second root run |
+| 2 | closed loop, network backends, telemetry, experiments | **in progress**: loop, simulated backend, experiments done; Mininet backend: integration suite green twice; campaign not yet run |
 | 3 | traffic, telemetry calibration of the nominal model | not started |
 | 4 | Eq 42 selection, utility, closed-loop evaluation at scale | not started |
 | 5 | experiment campaign and reports | started early (simulation) |
@@ -49,14 +50,23 @@ All 7 integration tests failed; the campaign was correctly not started.
    Root cause: the failing constructor never closed its half-built network (the test
    fixture never received a reference to it), so its interfaces and processes
    outlived the test and every later build collided with them. `mn -c` afterwards
-   removed the interfaces but not 8 iperf3 servers, which are still running in
-   orphaned namespaces (they will be removed by the next run's setup). Fixed:
+   removed the interfaces but not 8 iperf3 servers in orphaned namespaces (removed
+   since; see run 2). Fixed:
    construction and `MininetFabric.setup` release a partial network on any failure;
    `close()` is idempotent and runs every step even if one fails; setup removes this
    plan's leftovers first; every integration test ends with a leak check
    (interfaces, bridges, processes); the script runs the suite twice.
 
 See [DECISIONS.md](DECISIONS.md) and [EXPERIMENTS.md](EXPERIMENTS.md) for details.
+
+## Second Mininet run (2026-10-21, `experiments/results/mininet-20261021T172242Z/`)
+
+At commit `692ba3b`, clean tree. **9/9 integration tests passed in both passes**
+(69.73 s, 69.44 s), with no cleanup in between. After the last pass: 0 switch
+interfaces and 0 harness iperf3 processes left. The 8 orphaned iperf3 servers from run 1
+are gone as well (checked afterwards with `pgrep`). This shows the emulation does what the telemetry
+and constraints assume, within the tests' loose tolerances; it says nothing about the
+controller's performance or the safety of a real network.
 
 ## Headline results (simulation, 5 seeds)
 
@@ -73,29 +83,28 @@ See [DECISIONS.md](DECISIONS.md) and [EXPERIMENTS.md](EXPERIMENTS.md) for detail
 `scripts/run_unit_tests.sh` - **460 passed, 0 failed** (no root, no Mininet).
 New in Milestone 2: test_loop 15, test_sim 16, test_experiments 10,
 test_fallback_policy 8, test_emu 32 (13 of them regressions for the first Mininet
-run). Integration tests (`tests/integration`, now 9) are skipped without root; on
-real Mininet they have run once, before the fixes, and all failed. The H3 temporal-window regression (test_recovery_intents)
+run). Integration tests (`tests/integration`, 9) are skipped without root; on real
+Mininet: run 1 (before the fixes) 7/7 failed, run 2 9/9 passed twice. The H3 temporal-window regression (test_recovery_intents)
 is kept.
 
 ## Next engineering objective
 
-Re-run the integration suite on real Mininet, as root:
+Run the s1-s3 campaign on the emulated network, as root (about 40 minutes; it
+first repeats the integration suite twice and runs the campaign only if both passes
+are green):
 
 ```bash
-sudo scripts/mininet_run.sh
+sudo scripts/mininet_run.sh --campaign
 ```
 
-By default it runs only the 9 integration tests, twice and without cleanup in
-between, so that leaks fail the second pass (a few minutes). The 40-minute s1-s3
-campaign runs only with `--campaign`, and only after every pass is green; it is not
-to be started until the suite passes reliably. Then: fix whatever the real network
-still contradicts (e.g. counter precision, slot timing), run the campaign, and
-compare the measured results with the simulation. `feat/m2-mininet-backend` is
-merged into `main` only after that.
+Then compare the measured results with the simulation and record them in
+EXPERIMENTS.md, and decide on merging `feat/m2-mininet-backend` into `main` (not merged
+yet; the branch is pushed).
 
 ## Known limitations
 
-* All loop results so far are from simulation; the simulator is unvalidated.
+* All loop results so far are from simulation; the simulator is unvalidated. The
+  Mininet integration tests validate the emulation's plumbing, not the controller.
 * The nominal model is uncalibrated and not shown to be conservative (s5 shows the
   consequence).
 * π₀(s) is not shown to be recursively feasible (Assumption 3); uncertified
