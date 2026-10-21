@@ -9,6 +9,8 @@ evaluates to None (unknown) - never to "satisfied".
 Families (all configured in configs/constraints.yaml):
 
 link_capacity.<link>   sum of rate budgets of slices routed over the link
+                       + measured background load on the link (traffic outside
+                       the managed slices, audit H1)
                        - max_reserved_fraction * capacity                     [Mbit/s]
 flow_table.<switch>    current occupancy + rules_per_slice_per_switch * (slices
                        routed through the switch) - max_entries_per_switch    [entries]
@@ -137,9 +139,12 @@ class HardConstraints:
         self.slices = {s.name: s for s in slices}
 
     def required_state_keys(self) -> frozenset[str]:
+        keys: set[str] = set()
         if self.cfg.flow_table:
-            return frozenset(f"flow_table_occupancy.{sw}" for sw in self.topology.switches)
-        return frozenset()
+            keys |= {f"flow_table_occupancy.{sw}" for sw in self.topology.switches}
+        if self.cfg.link_capacity:
+            keys |= {f"background_load_mbps.{lid}" for lid in self.topology.links}
+        return frozenset(keys)
 
     def evaluate(self, state: NetworkState, action: ControlAction) -> ConstraintVector:
         values: list[ConstraintValue] = []
@@ -168,10 +173,15 @@ class HardConstraints:
             for lid, link in topo.links.items():
                 users = [s for s in self.slices if lid in route_links[s]]
                 reserved = sum(float(action.rate_budget_mbps[s]) for s in users)
+                background = state.value(f"background_load_mbps.{lid}")
                 limit = self.cfg.max_reserved_fraction * link.capacity_mbps
+                if math.isnan(background):
+                    values.append(ConstraintValue(f"link_capacity.{lid}", None, "background load not measured"))
+                    continue
                 values.append(ConstraintValue(
-                    f"link_capacity.{lid}", reserved - limit,
-                    f"reserved {reserved:g} Mbit/s by {users} vs limit {limit:g} Mbit/s",
+                    f"link_capacity.{lid}", reserved + background - limit,
+                    f"reserved {reserved:g} Mbit/s by {users} + background {background:g} Mbit/s "
+                    f"vs limit {limit:g} Mbit/s",
                 ))
 
         if self.cfg.flow_table:

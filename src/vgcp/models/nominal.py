@@ -4,7 +4,9 @@ A fluid / queueing approximation of the transport network:
 
 * admitted fraction    f_s = min(1, admission_limit_s / active_devices_s)  (1 if no devices)
 * slice load           x_s = min(f_s * offered_load_s, rate_budget_s)       (budgets are policed)
-* link utilization     rho_l = (sum of x_s over slices routed on l) / C_l
+* link utilization     rho_l = (sum of x_s over slices routed on l + background_l) / C_l
+                       (background = measured traffic outside the managed slices,
+                       carried forward unchanged over the horizon; audit H1)
 * service time         S_l = max packet size of slices on l / C_l
 * per-hop p99 delay    prop_l + proc + ln(100) * S_l / (1 - rho_l)          (M/M/1 sojourn p99)
 * slice p99 latency    k_safety * sum of per-hop p99 delays along the path
@@ -13,7 +15,8 @@ A fluid / queueing approximation of the transport network:
 * loss                 0 inside the validity domain - a placeholder, not a prediction
 * energy proxy         sum over powered-on links of (P_idle + P_dyn * rho_l)
 * flow-table occupancy carried forward unchanged from the current state
-  (loss and flow-table occupancy are reported by unmodelled_state_keys(); see M5)
+  (loss, flow-table occupancy and background load are reported by
+  unmodelled_state_keys(); see M5)
 
 Validity domain: all inputs known and every link utilization <= max_valid_utilization,
 with no load on a powered-off link. Outside it the predicted state may contain
@@ -90,12 +93,16 @@ class AnalyticNominalModel:
         self.params = params
 
     def required_state_keys(self) -> frozenset[str]:
-        return frozenset(f"flow_table_occupancy.{sw}" for sw in self.topology.switches)
+        return frozenset(
+            [f"flow_table_occupancy.{sw}" for sw in self.topology.switches]
+            + [f"background_load_mbps.{lid}" for lid in self.topology.links]
+        )
 
     def unmodelled_state_keys(self) -> frozenset[str]:
         return frozenset(
             [f"loss_rate.{s}" for s in self.slices]
             + [f"flow_table_occupancy.{sw}" for sw in self.topology.switches]
+            + [f"background_load_mbps.{lid}" for lid in self.topology.links]
         )
 
     def required_demand_keys(self) -> frozenset[str]:
@@ -124,7 +131,10 @@ class AnalyticNominalModel:
         service_ms: dict[str, float] = {}
         for lid, link in topo.links.items():
             users = [s for s in self.slices if lid in route[s]]
-            total = sum(load[s] for s in users) if users else 0.0
+            background = state.value(f"background_load_mbps.{lid}")
+            if math.isnan(background):
+                notes.append(f"background load on {lid} unknown")
+            total = (sum(load[s] for s in users) if users else 0.0) + background
             util[lid] = total / link.capacity_mbps
             pkt_bits = max((p.mean_packet_size_bytes[s] for s in users), default=0.0) * 8.0
             service_ms[lid] = pkt_bits / (link.capacity_mbps * 1e6) * 1e3
@@ -163,6 +173,8 @@ class AnalyticNominalModel:
             p.link_idle_power_w + p.link_dynamic_power_w * util[lid]
             for lid in topo.links if action.link_power.get(lid, True)
         )
+        for lid in topo.links:
+            values[f"background_load_mbps.{lid}"] = state.value(f"background_load_mbps.{lid}")
         for sw in topo.switches:
             key = f"flow_table_occupancy.{sw}"
             values[key] = state.value(key)

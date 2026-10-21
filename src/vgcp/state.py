@@ -25,6 +25,9 @@ from vgcp.errors import ConfigError, is_finite_real, is_real
 # action, which the controller records separately.
 STATE_FAMILIES: dict[str, tuple[str, str]] = {
     "link_utilization": ("link", "fraction of capacity"),
+    # Traffic on the link outside the managed slices: link rate minus the managed
+    # slices' flow rates on it (OpenFlow port and flow statistics). Audit H1.
+    "background_load_mbps": ("link", "Mbit/s"),
     "latency_p99_ms": ("slice", "ms"),
     "jitter_ms": ("slice", "ms"),
     "loss_rate": ("slice", "fraction of packets"),

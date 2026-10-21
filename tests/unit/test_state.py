@@ -14,8 +14,8 @@ def test_schema_has_expected_keys(cfg):
     assert "latency_p99_ms.urllc" in keys
     assert "flow_table_occupancy.s6" in keys
     assert "energy_w" in keys
-    # 7 links + 6 per-slice families x 3 slices + 6 switches + energy
-    assert len(keys) == 7 + 6 * 3 + 6 + 1
+    # 2 per-link families x 7 links + 6 per-slice families x 3 slices + 6 switches + energy
+    assert len(keys) == 2 * 7 + 6 * 3 + 6 + 1
 
 
 def test_nominal_state_all_ok(cfg):

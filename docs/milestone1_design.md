@@ -66,7 +66,7 @@ of violation. Boolean invariants use 0/1.
 
 | Component | Definition | Unit |
 |---|---|---|
-| `link_capacity.<l>` | Σ budgets of slices routed on l − f_max·C_l | Mbit/s |
+| `link_capacity.<l>` | Σ budgets of slices routed on l + background_l − f_max·C_l | Mbit/s |
 | `flow_table.<sw>` | occupancy(sw) + r·(#slices through sw) − N_max | entries |
 | `slice_min_budget.<s>` | min_s − budget_s | Mbit/s |
 | `routing_validity.<s>` | 0 if path allowed, loop-free, ingress→egress, all links powered; else 1 | – |
@@ -76,9 +76,11 @@ Missing inputs (e.g. no flow-table measurement) make a component **unknown**
 component > 0, else `unknown` if any is unknown, else `satisfied`.
 
 Assumptions under which these are meaningful:
-* `link_capacity` reserves budgets, not measured traffic. It bounds real load
-  only if the data plane polices each slice to its budget (meters, Milestone 2)
-  and no unmanaged traffic shares the links.
+* `link_capacity` counts reserved budgets plus the measured background load
+  (traffic outside the managed slices, audit H1). It bounds real load only if the
+  data plane polices each slice to its budget (meters, Milestone 2) and the
+  background measurement is accurate; a missing background measurement makes the
+  component unknown, so the action is rejected.
 * `flow_table` counts old and new rules together (make-before-break), so it is
   conservative for the update itself.
 
@@ -254,7 +256,7 @@ components; it is a regression check, not independent evidence.
 | D13 | Intents on unmodelled signals | not discussed | an intent may read a signal the nominal model does not predict (loss, flow-table occupancy) only at the current step; otherwise the shield refuses to start | over the rollout such a signal is a placeholder, so the intent would be vacuous (audit M5) |
 | D14 | Measurement validity | the state s_t is given | the shield rejects (UNKNOWN) if any state or demand metric it reads is missing, non-finite, out of bounds, stale or badly timestamped | the paper assumes s_t is known; a real controller's telemetry is not always usable |
 | D15 | Fallback outputs along the rollout | π₀ is assumed well defined | each π₀ output along the rollout must be in A (`fallback_continuation`), otherwise reject | detects a broken π₀ instead of crashing or using an invalid action |
-| D16 | Link-capacity constraint | "physical link capacities" | Σ reserved rate budgets on a link ≤ f_max · capacity; measured load is not used | meters police each slice to its budget (Milestone 2); ignores unmanaged traffic, see open finding H1 |
+| D16 | Link-capacity constraint | "physical link capacities" | Σ reserved rate budgets on a link + measured background load ≤ f_max · capacity | slice traffic is bounded by its budget (meters, Milestone 2); traffic outside the slices is measured as `background_load_mbps` = link rate − managed flow rates (audit H1). T̂ adds the background to utilization and holds it constant over the horizon, which is not conservative if it grows |
 | D17 | Predicate functions | any real-valued p_i(s, a) (Eq 5) | single-signal comparisons `x <= c` (p = c − x) and `x >= c` (p = x − c) | covers Eq 6 and the configured intents; sums or maxima of signals are not expressible yet |
 
 ## 7. Illustrative parameters

@@ -84,6 +84,9 @@ An independent audit of Milestone 1 found issues; six are fixed:
 * **M2 (fixed)** - the paper's out-of-distribution threshold (Def 2) is no longer
   misapplied to the nominal model. The nominal model reports an explicit validity
   flag (extension D12); Def 2 awaits a learned world model.
+* **H1 (fixed)** - traffic outside the managed slices is measured per link
+  (`background_load_mbps`) and counted by the capacity constraint and the nominal
+  model. Milestone 2 must provide it (port rate minus managed flow rates).
 * **M5 (fixed)** - an intent may not read, over the rollout, a signal the nominal
   model does not predict (loss, flow-table occupancy); the shield refuses such
   configurations. The mMTC loss intent is now a current-measurement check.
@@ -98,8 +101,6 @@ An independent audit of Milestone 1 found issues; six are fixed:
 
 Unresolved:
 
-* **H1** - the capacity constraint and nominal model ignore measured link load
-  (a saturated link can still be certified).
 * **H3** - with intents evaluated from the measured state, the fallback policy is
   rejected whenever the current measurement already violates an intent, so the
   paper's recursive-feasibility assumption cannot hold in such states.

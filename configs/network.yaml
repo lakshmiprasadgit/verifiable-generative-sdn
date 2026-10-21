@@ -47,6 +47,7 @@ slices:
 # A measurement outside its range is treated as invalid, not clipped.
 state_bounds:
   link_utilization: [0.0, 1.0]   # real counters may read slightly above 1 (audit L5, revisit in Milestone 3)
+  background_load_mbps: [0.0, 10000.0]   # unmanaged traffic per link (audit H1)
   latency_p99_ms: [0.0, 10000.0]
   jitter_ms: [0.0, 10000.0]
   loss_rate: [0.0, 1.0]
