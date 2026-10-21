@@ -64,16 +64,24 @@ def build_controller(cfg: ProjectConfig, mode: str, backend, seed: int, n_random
     raise ValueError(f"unknown mode {mode!r}; choose from {MODES}")
 
 
-def run_trial(cfg: ProjectConfig, scenario: Scenario, mode: str, seed: int, n_random: int = 4) -> list[dict[str, Any]]:
-    backend = SimulatedNetwork(cfg, scenario, seed)
-    controller = build_controller(cfg, mode, backend, seed, n_random)
-    rows = []
-    for _ in range(scenario.slots):
-        obs = backend.observe()
-        rec = controller.step(obs)
-        backend.advance()
-        rows.append({"step": rec.to_dict(), "truth_next": backend.ground_truth()})
-    return rows
+def run_trial(cfg: ProjectConfig, scenario: Scenario, mode: str, seed: int, n_random: int = 4,
+              make_backend=None) -> list[dict[str, Any]]:
+    """make_backend(cfg, scenario, seed) -> NetworkBackend; default: the simulator.
+    For an emulated network, 'truth_next' holds measurements, not ground truth."""
+    backend = (make_backend or SimulatedNetwork)(cfg, scenario, seed)
+    try:
+        controller = build_controller(cfg, mode, backend, seed, n_random)
+        rows = []
+        for _ in range(scenario.slots):
+            obs = backend.observe()
+            rec = controller.step(obs)
+            backend.advance()
+            rows.append({"step": rec.to_dict(), "truth_next": backend.ground_truth()})
+        return rows
+    finally:
+        close = getattr(backend, "close", None)
+        if close is not None:
+            close()
 
 
 def _violations(row: dict[str, Any], cfg: ProjectConfig, bounds: dict[str, float]) -> dict[str, bool]:

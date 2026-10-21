@@ -55,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--modes", nargs="+", default=list(MODES), choices=MODES)
     ap.add_argument("--seeds", default="1-5")
     ap.add_argument("--n-random", type=int, default=4)
+    ap.add_argument("--backend", choices=("sim", "mininet"), default="sim",
+                    help="sim: simulated ground truth (no root); mininet: emulated network (needs root)")
     ap.add_argument("--fallback-policy", choices=("static", "capacity_aware"),
                     help="override shield.fallback_policy from the configuration")
     ap.add_argument("--out", default=str(ROOT / "experiments" / "results" / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")))
@@ -68,6 +70,14 @@ def main(argv: list[str] | None = None) -> int:
     slices = {s.name for s in cfg.slices}
     scenarios = [load_scenario(p, slices, set(cfg.topology.links)) for p in args.scenarios]
     seeds = _seeds(args.seeds)
+    make_backend = None
+    if args.backend == "mininet":
+        from vgcp.emu import MininetFabric, MininetNetwork
+
+        MininetFabric()  # fails fast without root or tools, before any output is written
+
+        def make_backend(c, sc, seed):
+            return MininetNetwork(c, sc, seed, MininetFabric())
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=False)
     manifest = {
@@ -78,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         # dirty if any code, configuration or scenario differs from the commit, untracked files included
         "git_dirty": bool(_git("status", "--porcelain", "--", "src", "configs", "experiments/scenarios")),
         "python": platform.python_version(),
-        "backend": "simulated",
+        "backend": "simulated" if args.backend == "sim" else "mininet (measured)",
         "config_hash": cfg.config_hash,
         "fallback_policy": cfg.shield.fallback_policy,
         "scenarios": {s.name: {"file": str(p), "digest": s.digest} for s, p in zip(scenarios, args.scenarios)},
@@ -90,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         for mode in args.modes:
             sums = []
             for seed in seeds:
-                rows = run_trial(cfg, sc, mode, seed, args.n_random)
+                rows = run_trial(cfg, sc, mode, seed, args.n_random, make_backend)
                 d = out / sc.name / mode / f"seed-{seed}"
                 d.mkdir(parents=True)
                 (d / "steps.jsonl").write_text("".join(dumps(r) + "\n" for r in rows))
@@ -120,7 +130,9 @@ COLUMNS = [
 
 
 def render_markdown(table: dict, manifest: dict) -> str:
-    lines = [f"Simulated backend. Commit `{manifest['git_commit'][:7]}`"
+    kind = ("Simulated backend (ground truth)" if manifest["backend"] == "simulated"
+            else "Emulated Mininet backend (measured values, not ground truth)")
+    lines = [f"{kind}. Commit `{manifest['git_commit'][:7]}`"
              f"{' (dirty)' if manifest['git_dirty'] else ''}, seeds {manifest['seeds']}. "
              "Values are mean ± std over seeds.", ""]
     for sc, modes in table.items():

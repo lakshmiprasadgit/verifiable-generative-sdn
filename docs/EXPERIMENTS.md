@@ -2,8 +2,9 @@
 
 All results below come from the **simulated backend** (`vgcp.sim`), a ground-truth
 model that deliberately differs from the shield's nominal model. They are not
-measurements of a real network and do not establish real-network safety. Mininet
-runs are planned (see STATUS.md).
+measurements of a real network and do not establish real-network safety. The
+Mininet backend is implemented; **no Mininet results exist yet** (see "Emulated
+network runs" below).
 
 ## Research questions
 
@@ -172,3 +173,19 @@ the shielded controller with the static π₀, for the ablation.
 * One topology, one demand mix, five seeds; standard deviations are across seeds only.
 * The selection rule is "first certified", not the paper's Eq 42.
 * Thresholds and scales are illustrative, not 6G requirements.
+
+## Emulated network runs (Mininet) - not yet run
+
+`sudo scripts/mininet_run.sh` runs the root-only integration tests (connectivity,
+routes, meter policing, background accounting, probe latency, reroute timing, a
+closed-loop smoke test) and, if they pass, a campaign of s1-s3 × 4 controllers ×
+3 seeds on the emulated network (about 40 minutes). Output goes to
+`experiments/results/mininet-<UTC>/`.
+
+Differences from the simulator, by design of the emulation:
+* values are **measurements**, not ground truth (counters, ping probes);
+* offered load is constant within a demand window (no per-slot demand noise);
+* admission control is emulated by scaling the sender's rate;
+* background traffic follows one path at a time;
+* telemetry faults (s4) and controller faults (s6) are injected by the backend, as
+  in the simulator; model mismatch (s5) arises from the configured packet sizes.

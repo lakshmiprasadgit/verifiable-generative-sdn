@@ -126,3 +126,46 @@ violation slots in s2 and no uncertified fallbacks; identical results elsewhere
 
 **Uncertainty.** π₀(s) is still **not shown to be recursively feasible**
 (Assumption 3); in s3 it was uncertifiable for 20 slots.
+
+---
+
+## 2026-10-21 · SDN control channel for the Mininet backend
+
+**Problem.** The loop must install routes and rate limits on Open vSwitch and read
+counters once per 1 s slot.
+
+**Alternatives.** (a) An OS-Ken controller application, with the loop talking to it
+over REST or RPC. (b) The loop programs the switches directly with OpenFlow 1.3 via
+`ovs-ofctl`, behind a small `Fabric` interface.
+
+**Chosen.** (b). OS-Ken 4.2.2 was checked and installs and imports on this Python
+3.12, so (a) remains possible.
+
+**Why.** Routing is proactive (no packet-in handling needed), and (a) would add a
+second process whose event loop, RPC latency and failures are not what this research
+studies. (b) is synchronous and deterministic per slot. The `Fabric` boundary keeps
+a controller a drop-in replacement.
+
+**Consequences.** No reactive behaviour (e.g. topology discovery); the topology comes
+from `configs/network.yaml`. Each `ovs-ofctl` call costs a process start, which is
+counted in the measured decision and slot timing.
+
+**Uncertainty.** Whether 1 s slots leave enough time for rule updates, counter reads
+and probes on this machine is measured by the integration tests and campaign.
+
+---
+
+## 2026-10-21 · What the emulated network measures
+
+**Chosen definitions** (`vgcp/emu/telemetry.py`): link rate from the upstream port's
+tx counter; managed rate from the slices' forward-rule counters on that switch;
+background = link rate − managed rate; offered load from the ingress rule (before the
+meter); loss from the first switch after the meter to the egress (meter drops are
+budget enforcement, not loss); p99 latency = p99 of 8 ping RTTs per slot / 2.
+
+**Consequences.** A slot whose probes are all lost has unknown latency: the shield
+rejects (UNKNOWN), and the experiment scores it as an infinite-latency violation.
+There is no ground truth in an emulated network; Mininet results are measurements.
+
+**Uncertainty.** Ping shares the slice's queues but is ICMP, not the slice's own
+packets; RTT/2 assumes symmetric paths (true for these links).

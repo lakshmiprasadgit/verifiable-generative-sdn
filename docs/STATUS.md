@@ -6,12 +6,14 @@ claim about the safety of a real network.
 ## Where we are
 
 **Milestone 2 in progress.** The closed control loop runs end to end against a
-*simulated* network; the Mininet / Open vSwitch backend is the next increment.
+*simulated* network. The Mininet / Open vSwitch backend is implemented and
+unit-tested without root; **it has not yet run on a real Mininet network** - that
+needs one root command (below).
 
 | Milestone | Scope | Status |
 |---|---|---|
 | 1 | state/action schemas, constraints, STL robustness, verification shield | done; all audit findings addressed |
-| 2 | closed loop, network backends, telemetry, experiments | **in progress**: loop + simulated backend + experiments done; Mininet backend next |
+| 2 | closed loop, network backends, telemetry, experiments | **in progress**: loop, simulated backend, experiments done; Mininet backend implemented, awaiting first root run |
 | 3 | traffic, telemetry calibration of the nominal model | not started |
 | 4 | Eq 42 selection, utility, closed-loop evaluation at scale | not started |
 | 5 | experiment campaign and reports | started early (simulation) |
@@ -44,19 +46,25 @@ claim about the safety of a real network.
 
 ## Tests
 
-`scripts/run_unit_tests.sh` - **428 passed, 0 failed** (no root, no Mininet).
+`scripts/run_unit_tests.sh` - **447 passed, 0 failed** (no root, no Mininet).
 New in Milestone 2: test_loop 15, test_sim 16, test_experiments 10,
-test_fallback_policy 8. The H3 temporal-window regression (test_recovery_intents)
+test_fallback_policy 8, test_emu 19. Integration tests (`tests/integration`, 7)
+are skipped without root and have not run yet. The H3 temporal-window regression (test_recovery_intents)
 is kept.
 
 ## Next engineering objective
 
-Mininet / Open vSwitch backend behind the same `NetworkBackend` interface:
-topology from `configs/network.yaml`, slice routing and per-slice rate limits,
-background traffic hosts, telemetry from OVS port and flow counters (background =
-port rate − managed flow rates), latency probes. Code and parsers will be built and
-unit-tested without root; the real runs need **one consolidated set of root commands**
-from the team.
+Run the emulated network once, as root:
+
+```bash
+sudo scripts/mininet_run.sh
+```
+
+It runs 7 root-only integration tests and, if they pass, the s1-s3 campaign on
+Mininet (about 40 minutes), then makes the results owned by the invoking user. The
+outcome decides the next step: fix whatever the real network contradicts (e.g.
+meter support in the WSL kernel datapath, counter precision, slot timing), then
+compare the measured results with the simulation.
 
 ## Known limitations
 

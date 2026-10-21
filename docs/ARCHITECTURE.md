@@ -8,7 +8,7 @@ generative policy G_θ, an analytic model T̂ instead of the world model W_ψ.
 
 ```
              ┌──────────────────────── NetworkBackend ────────────────────────┐
-             │  SimulatedNetwork (no root)        MininetNetwork (planned)     │
+             │  SimulatedNetwork (no root)        MininetNetwork (needs root)  │
              └──┬─────────────────────────────────────────────▲──────────────┘
      observe()  │ Observation(t, s_t, d_t, now)                │ apply(a)  (only via the applier)
                 ▼                                              │
@@ -49,6 +49,7 @@ post-action measurement. Experiments score the ground truth of that next slot.
 | Verification shield | `vgcp/shield.py` | V, certificates bound to action and inputs | Eqs 14, 17-18 |
 | Loop | `vgcp/loop/` | interfaces, candidate generator, controllers, enforcing applier | Sec 3 |
 | Simulated network | `vgcp/sim/` | ground truth for experiments; deliberately differs from T̂ | – |
+| Emulated network | `vgcp/emu/` | Mininet + Open vSwitch: plan, OpenFlow 1.3 rules and meters, counter telemetry, traffic and probes; only `MininetFabric` needs root | – |
 | Experiments | `vgcp/experiments/`, `experiments/` | scenarios × controllers × seeds, raw logs, summaries | – |
 
 ## Boundaries that keep claims honest
@@ -72,3 +73,17 @@ Eq 13 applies the candidate action at k = 0 and π₀ from k = 1. Intents are wr
 `G[1,10] p`, so the candidate's predicted effect (first visible at k = 1) is inside
 the checked window. If the network applies actions late (actuation delay), the real
 effect falls outside what was checked; scenario s6 measures this.
+
+## Emulated network (vgcp/emu)
+
+```
+EmulationPlan (pure)  ──▶ MininetFabric (root): Mininet topology, ovs-ofctl, iperf3, ping
+      │                        ▲
+      ▼                        │ Fabric interface (unit-tested with a fake)
+OpenFlow rules / meters ──▶ MininetNetwork (NetworkBackend): one real-time slot per advance()
+counter parsers         ──▶ telemetry: counters → measured state (background = port − flows)
+```
+
+Per traffic class (each slice, plus background), proactive forward and reverse rules
+on every switch of its path; slices are metered at the ingress switch. Link power
+actions bring both ends of a link down with `mod-port`.
