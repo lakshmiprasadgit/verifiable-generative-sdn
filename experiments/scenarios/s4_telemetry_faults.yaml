@@ -1,0 +1,22 @@
+name: s4_telemetry_faults
+description: >
+  The telemetry collector freezes during slots 20-30 (old values re-sent with old
+  timestamps) and background-load counters are missing during slots 40-45, while
+  eMBB demand rises 50 % during slots 15-35. RQ: does the shield refuse to act on
+  stale or missing data, and what does acting blind cost?
+slots: 60
+demand_mbps: {urllc: 2.0, embb: 80.0, mmtc: 2.0}
+devices: {urllc: 10, embb: 5, mmtc: 200}
+demand_noise: 0.05
+demand_events:
+  - {start: 15, end: 35, slice: embb, factor: 1.5}
+stale_telemetry:
+  - {start: 20, end: 30}
+missing_telemetry:
+  - {start: 40, end: 45, prefixes: [background_load_mbps.]}
+ground_truth:
+  packet_size_bytes: {urllc: 64, embb: 1500, mmtc: 100}
+  processing_delay_ms_per_hop: 0.05
+  latency_noise: 0.05
+  measurement_noise: 0.02
+  buffer_ms: 50.0

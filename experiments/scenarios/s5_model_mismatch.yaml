@@ -1,0 +1,15 @@
+name: s5_model_mismatch
+description: >
+  The real network differs from the nominal model: URLLC sends 1500-byte packets
+  (the model assumes 64) and mMTC 500-byte packets (model 100), with 20 % latency
+  noise. RQ: how often is an action that the shield certified actually unsafe?
+slots: 60
+demand_mbps: {urllc: 2.0, embb: 80.0, mmtc: 2.0}
+devices: {urllc: 10, embb: 5, mmtc: 200}
+demand_noise: 0.05
+ground_truth:
+  packet_size_bytes: {urllc: 1500, embb: 1500, mmtc: 500}
+  processing_delay_ms_per_hop: 0.05
+  latency_noise: 0.2
+  measurement_noise: 0.02
+  buffer_ms: 50.0

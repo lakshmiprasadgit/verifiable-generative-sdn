@@ -1,0 +1,18 @@
+name: s2_background_on_embb_path
+description: >
+  Unmanaged traffic of 120 Mbit/s appears on path B (l13, l35; 200 Mbit/s) during
+  slots 20-40, where eMBB normally runs. RQ (H1): does accounting for measured
+  background traffic prevent overload, and what happens when no candidate - not
+  even pi_0 - fits?
+slots: 60
+demand_mbps: {urllc: 2.0, embb: 80.0, mmtc: 2.0}
+devices: {urllc: 10, embb: 5, mmtc: 200}
+demand_noise: 0.05
+background:
+  - {start: 20, end: 40, links: [l13, l35], mbps: 120.0}
+ground_truth:
+  packet_size_bytes: {urllc: 64, embb: 1500, mmtc: 100}
+  processing_delay_ms_per_hop: 0.05
+  latency_noise: 0.05
+  measurement_noise: 0.02
+  buffer_ms: 50.0

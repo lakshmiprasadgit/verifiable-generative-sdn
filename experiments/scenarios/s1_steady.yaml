@@ -1,0 +1,14 @@
+name: s1_steady
+description: >
+  Control case. Steady demand, no background traffic, ground truth matches the
+  nominal model's packet sizes. RQ: what does the shield cost when nothing goes wrong?
+slots: 60
+demand_mbps: {urllc: 2.0, embb: 80.0, mmtc: 2.0}
+devices: {urllc: 10, embb: 5, mmtc: 200}
+demand_noise: 0.05
+ground_truth:
+  packet_size_bytes: {urllc: 64, embb: 1500, mmtc: 100}
+  processing_delay_ms_per_hop: 0.05
+  latency_noise: 0.05
+  measurement_noise: 0.02
+  buffer_ms: 50.0

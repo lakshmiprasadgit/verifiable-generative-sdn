@@ -1,0 +1,21 @@
+name: s6_actuation_delay_and_failures
+description: >
+  Actions take effect one slot late (the shield's rollout assumes the next slot), the
+  background surge of s2 occurs on path B during slots 20-40, and the controller
+  cannot reach the switches during slots 45-50. RQ: what breaks when the timing
+  assumption of the rollout (effect at k = 1) is false, and when actions are lost?
+slots: 60
+demand_mbps: {urllc: 2.0, embb: 80.0, mmtc: 2.0}
+devices: {urllc: 10, embb: 5, mmtc: 200}
+demand_noise: 0.05
+background:
+  - {start: 20, end: 40, links: [l13, l35], mbps: 120.0}
+controller_failures:
+  - {start: 45, end: 50}
+actuation_delay_slots: 1
+ground_truth:
+  packet_size_bytes: {urllc: 64, embb: 1500, mmtc: 100}
+  processing_delay_ms_per_hop: 0.05
+  latency_noise: 0.05
+  measurement_noise: 0.02
+  buffer_ms: 50.0

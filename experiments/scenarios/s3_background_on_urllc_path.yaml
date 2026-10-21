@@ -1,0 +1,17 @@
+name: s3_background_on_urllc_path
+description: >
+  Unmanaged traffic of 35 Mbit/s on path A (l12, l25; 50 Mbit/s), the URLLC path,
+  during slots 20-40. RQ: does the shield protect the 1 ms URLLC intent, and how
+  often does it have no certifiable action?
+slots: 60
+demand_mbps: {urllc: 2.0, embb: 80.0, mmtc: 2.0}
+devices: {urllc: 10, embb: 5, mmtc: 200}
+demand_noise: 0.05
+background:
+  - {start: 20, end: 40, links: [l12, l25], mbps: 35.0}
+ground_truth:
+  packet_size_bytes: {urllc: 64, embb: 1500, mmtc: 100}
+  processing_delay_ms_per_hop: 0.05
+  latency_noise: 0.05
+  measurement_noise: 0.02
+  buffer_ms: 50.0
