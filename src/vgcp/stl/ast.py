@@ -112,6 +112,19 @@ def false() -> Formula:
     return Not(Top())
 
 
+def predicates(phi: Formula):
+    """All atomic predicates of phi, in order of appearance."""
+    if isinstance(phi, Predicate):
+        yield phi
+    elif isinstance(phi, Not):
+        yield from predicates(phi.child)
+    elif isinstance(phi, (And, Until)):
+        yield from predicates(phi.left)
+        yield from predicates(phi.right)
+    elif not isinstance(phi, Top):
+        raise TypeError(f"not an STL formula: {phi!r}")
+
+
 def signals(phi: Formula) -> frozenset[str]:
     if isinstance(phi, Predicate):
         return frozenset({phi.signal})

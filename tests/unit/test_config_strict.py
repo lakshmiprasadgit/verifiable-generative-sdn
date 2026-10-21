@@ -40,7 +40,8 @@ def test_per_intent_key_typo_rejected(tmp_path):
 
 
 def test_enabled_typo_rejected(tmp_path):
-    d = _yaml_dir(tmp_path, "intents.yaml", "    enabled: false\n", "    enable: false\n")
+    d = _yaml_dir(tmp_path, "intents.yaml", "  - name: mmtc_loss\n    enabled: false\n",
+                  "  - name: mmtc_loss\n    enable: false\n")
     with pytest.raises(ConfigError) as exc:
         load_config(d)
     msg = str(exc.value)
@@ -138,9 +139,9 @@ def test_repository_config_values_match_yaml():
     data = yaml.safe_load((CONFIG_DIR / "intents.yaml").read_text())
     assert cfg.rho_min == data["rho_min"] == 0.05
     # Enabled flags and rho_min as written in the file; the disabled intent is excluded.
-    assert [it.get("enabled", True) for it in data["intents"]] == [True, True, True, False]
+    assert [it.get("enabled", True) for it in data["intents"]] == [True, True, True, False, False]
     assert {i.name: i.rho_min for i in cfg.intents} == {
-        "urllc_latency": 0.05, "embb_latency": 0.05, "mmtc_loss": 0.05,
+        "urllc_latency": 0.05, "embb_latency": 0.05, "mmtc_latency": 0.05,
     }
     assert cfg.raw == raw_config()
 

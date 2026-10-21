@@ -11,8 +11,8 @@ from vgcp.stl import Top
 def test_repository_config_loads(cfg):
     assert cfg.horizon_H == 10
     assert cfg.delta_t_s == 1.0
-    assert [i.name for i in cfg.intents] == ["urllc_latency", "embb_latency", "mmtc_loss"]  # disabled one excluded
-    assert {i.name: i.rho_min for i in cfg.intents} == {"urllc_latency": 0.05, "embb_latency": 0.05, "mmtc_loss": 0.05}
+    assert [i.name for i in cfg.intents] == ["urllc_latency", "embb_latency", "mmtc_latency"]  # disabled ones excluded
+    assert {i.name: i.rho_min for i in cfg.intents} == {"urllc_latency": 0.05, "embb_latency": 0.05, "mmtc_latency": 0.05}
     assert set(cfg.topology.paths) == {"A", "B", "C"}
     assert cfg.topology.paths["C"].links == ("l14", "l46", "l65")
     assert cfg.nominal_model.calibration_status == "uncalibrated"

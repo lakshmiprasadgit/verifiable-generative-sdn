@@ -252,7 +252,7 @@ components; it is a regression check, not independent evidence.
 | D8 | Strict predicates | not discussed | `<`, `>` rejected | robustness cannot distinguish them |
 | D9 | Time domain | "dense-time" STL | discrete slots of Δt | the paper's own model is slotted |
 | D10 | d̄ conservativeness | "conservative demand forecast" | one upper-bound forecast | conservative for load and latency, **optimistic** for lower bounds on throughput; no throughput lower-bound intents configured |
-| D11 | Trajectory start | ŝ_t = s_t (Eq 12) | as written | intents are partly decided by the current measurement, independently of a_t |
+| D11 | Trajectory start | ŝ_t = s_t (Eq 12) | as written | intents are partly decided by the current measurement, independently of a_t; resolved for the configured intents by D19 (audit H3) |
 | D12 | Nominal-model validity domain | T̂ is assumed conservative; no validity domain | shield rejects (UNKNOWN) if any rollout step is outside T̂'s validity domain (`nominal_model_domain`) | an analytic queueing model's formulas break down near saturation; using them there would certify on meaningless numbers. Not the paper's Def 2 (which concerns W_ψ) |
 | D13 | Intents on unmodelled signals | not discussed | an intent may read a signal the nominal model does not predict (loss, flow-table occupancy) only at the current step; otherwise the shield refuses to start | over the rollout such a signal is a placeholder, so the intent would be vacuous (audit M5) |
 | D14 | Measurement validity | the state s_t is given | the shield rejects (UNKNOWN) if any state or demand metric it reads is missing, non-finite, out of bounds, stale or badly timestamped | the paper assumes s_t is known; a real controller's telemetry is not always usable |
@@ -260,6 +260,7 @@ components; it is a regression check, not independent evidence.
 | D16 | Link-capacity constraint | "physical link capacities" | Σ reserved rate budgets on a link + measured background load ≤ f_max · capacity | slice traffic is bounded by its budget (meters, Milestone 2); traffic outside the slices is measured as `background_load_mbps` = link rate − managed flow rates (audit H1). T̂ adds the background to utilization and holds it constant over the horizon, which is not conservative if it grows |
 | D17 | Predicate functions | any real-valued p_i(s, a) (Eq 5) | single-signal comparisons `x <= c` (p = c − x) and `x >= c` (p = x − c) | covers Eq 6 and the configured intents; sums or maxima of signals are not expressible yet |
 | D18 | Predicate normalization | p₁ = L_max − latency (Eq 6), in the signal's unit | p = (c − x)/scale with a declared scale per signal family (`intents.signal_scales`), so robustness is unitless | one ρ_min (Eq 17) and minima over intents (Eqs 27, 40) then compare like with like; positive scaling never changes satisfaction (audit M4) |
+| D19 | Recovery-style intents | intents over [0, b] with ŝ_t = s_t | configured intents are `G[1,10] p`: the measured slot k = 0 is excused; the certificate lists `measured_violations` | with `G[0,10] p` a violation already in s_t rejects every action including π₀, contradicting Assumption 3. Wider windows (e.g. `F[0,2] G[0,8] p`) are unsafe because Eq 13 applies the candidate for one step, so its effect appears only at k = 1 (pinned by a test). Eq 14 is unchanged (audit H3) |
 
 ## 7. Illustrative parameters
 

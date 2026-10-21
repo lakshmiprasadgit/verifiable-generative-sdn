@@ -29,7 +29,7 @@ deviation or extension (see [milestone1_design.md §6](milestone1_design.md));
 | Eq 17 | A_Φ(s) = {a ∈ A : ρ_φ ≥ ρ_min ∀φ, c ≤ 0} | shield checks 1, 4, 8; extensions 2, 3, 5, 6, 7 only remove actions | test_eq17: hand-calculated instance, literal Eq 17 reference on a 648-action grid (soundness; gaps attributed to extensions), `test_d3_*`, `test_d12_*` | Impl\* (D3, D12; single unitless ρ_min via D18, `test_normalization.py`) |
 | Eq 18 | V : S × A × Φ → {0, 1} | `VerificationShield.verify` → `Certificate.accepted` | test_shield | Impl\* (D4) |
 | Assumption 2 | V = 1 ⇒ a ∈ A_Φ(s) | holds by construction **relative to T̂, d̄, π₀, c**; not for the real network | `test_shield_is_sound_wrt_literal_eq17_on_grid`, `test_acceptance_implies_every_check_passed` | Impl (model-relative only) |
-| Assumption 3 | π₀ recursively feasible | π₀ checked to be in A at load and along the rollout only | `fallback_continuation` check | Later (Milestone 4) |
+| Assumption 3 | π₀ recursively feasible | not established. Recovery-style intents (D19) remove the case where a measured violation makes π₀ uncertifiable; `measured_violations` records such states | `test_recovery_intents.py` | Later (Milestone 4) |
 | Sec 2.4, Eq 21 | generative policy G_θ | – | – | Not in Stage 1 |
 | Sec 2.5, Eqs 22–23 | world model W_ψ, uncertainty u_ψ | not implemented; Stage 1 has no learned model. W_ψ is not the shield's `TransitionModel` (that is T̂) | – | Later |
 | Def 2 | OOD trigger u_ψ > η ⇒ fallback | not implemented: needs W_ψ (no η setting). Separate extension D12: shield check `nominal_model_domain` rejects rollouts outside T̂'s validity domain | `test_out_of_domain_rollout_rejects`, `test_d12_removes_actions_that_eq17_admits` (D12) | Later (D12 is an extension, not Def 2) |

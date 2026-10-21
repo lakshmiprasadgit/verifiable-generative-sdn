@@ -76,5 +76,6 @@ def test_measurement_only_loss_intent_uses_the_measured_value():
 
 def test_repository_intents_satisfy_the_rule(cfg):
     VerificationShield.from_config(cfg)
-    mmtc = next(i for i in cfg.intents if i.name == "mmtc_loss")
-    assert signal_offsets(mmtc.formula) == {"loss_rate.mmtc": 0}
+    # the (disabled) loss intent is written as a current-measurement check
+    loss = next(i for i in cfg.raw["intents"]["intents"] if i["name"] == "mmtc_loss")
+    assert signal_offsets(parse(loss["formula"])) == {"loss_rate.mmtc": 0}

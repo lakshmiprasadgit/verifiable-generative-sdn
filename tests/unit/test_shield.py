@@ -23,7 +23,7 @@ _CFG = load_config(CONFIG_DIR)
 _SHIELD = VerificationShield.from_config(_CFG)
 
 LATER_CHECKS = ["hard_constraints_now", "nominal_model_domain", "fallback_continuation",
-                "hard_constraints_rollout", "intent:urllc_latency", "intent:embb_latency", "intent:mmtc_loss"]
+                "hard_constraints_rollout", "intent:urllc_latency", "intent:embb_latency", "intent:mmtc_latency"]
 
 
 def status(cert, name):
@@ -38,8 +38,9 @@ def test_accepts_fallback_in_nominal_conditions(cfg, shield):
     assert [c.name for c in cert.checks] == ["action_valid", "state_measurements", "demand_measurements", *LATER_CHECKS]
     # urllc: measured 0.5 ms at k=0 (rho 0.5); predicted 0.59861 ms for k>=1 (rho 0.40139) -> min
     assert cert.robustness["urllc_latency"] == pytest.approx(1.0 - 0.598604, abs=1e-5)
-    # mmtc: measured loss 0 -> rho = (0.02 - 0) / scale 0.01 = 2.0 (unitless, M4)
-    assert cert.robustness["mmtc_loss"] == pytest.approx(2.0)
+    # mmtc on path C, 3 hops: 1.5 * 3 * (2 + 0.05 + ln(100) * 0.016 / (1 - 0.048)) = 9.5733 ms
+    # -> rho = (20 - 9.5733) / 1 ms; the measured slot k = 0 is excused by G[1,10] (H3)
+    assert cert.robustness["mmtc_latency"] == pytest.approx(20 - 9.57332, abs=1e-4)
     assert cert.horizon_H == 10 and cert.config_hash == cfg.config_hash
 
 
@@ -88,7 +89,7 @@ def test_rejects_full_flow_table(cfg, shield):
 
 
 # ---------------------------------------------------------------- missing / stale telemetry
-@pytest.mark.parametrize("key", ["latency_p99_ms.urllc", "loss_rate.mmtc", "flow_table_occupancy.s4"])
+@pytest.mark.parametrize("key", ["latency_p99_ms.urllc", "latency_p99_ms.mmtc", "flow_table_occupancy.s4"])
 def test_missing_required_state_metric_rejects(cfg, shield, key):
     metrics = dict(nominal_state(cfg).metrics)
     del metrics[key]
@@ -208,8 +209,15 @@ def test_wrong_input_types_reject(cfg, shield):
 
 
 # ---------------------------------------------------------------- STL intents
-def test_current_measured_violation_rejects(cfg, shield):
+def _g010(name, formula):
+    def mutate(raw):
+        raw["intents"]["intents"] = [{"name": name, "formula": formula}]
+    return VerificationShield.from_config(config_with(mutate))
+
+
+def test_current_measured_violation_rejects(cfg):
     # Eq 14 evaluates from s-hat_t = s_t: a measured 1.2 ms already violates G[0,10](lat <= 1)
+    shield = _g010("urllc_latency", "G[0,10](latency_p99_ms.urllc <= 1.0)")
     cert = shield.verify(nominal_state(cfg, **{"latency_p99_ms.urllc": 1.2}), nominal_demand(), cfg.fallback_action, NOW)
     assert not cert.accepted
     assert status(cert, "intent:urllc_latency") is CheckStatus.FAIL
@@ -225,8 +233,9 @@ def test_rejects_predicted_intent_violation(cfg, shield):
     assert status(cert, "intent:embb_latency") is CheckStatus.PASS
 
 
-def test_robustness_below_margin_rejects_even_if_satisfied(cfg, shield):
+def test_robustness_below_margin_rejects_even_if_satisfied(cfg):
     # measured 0.97 ms: satisfied (rho = 0.03 > 0) but rho < rho_min = 0.05
+    shield = _g010("urllc_latency", "G[0,10](latency_p99_ms.urllc <= 1.0)")
     cert = shield.verify(nominal_state(cfg, **{"latency_p99_ms.urllc": 0.97}), nominal_demand(), cfg.fallback_action, NOW)
     assert cert.robustness["urllc_latency"] == pytest.approx(0.03)
     assert not cert.accepted and status(cert, "intent:urllc_latency") is CheckStatus.FAIL

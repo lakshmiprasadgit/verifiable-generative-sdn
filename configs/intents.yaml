@@ -27,24 +27,41 @@ signal_scales:
   latency_p99_ms: 1.0    # ms
   loss_rate: 0.01        # fraction of packets (1 percentage point)
 
+# Intents are recovery-style (audit H3): "G[1,10] p" means p holds from the next slot
+# on. Eq 14 starts at the measured state s_t, so a plain G[0,10] p would reject every
+# action - including the fallback - whenever s_t already violates p. Excusing only
+# k = 0 lets the fallback be certified while still checking the candidate's effect,
+# which the rollout shows at k = 1 (Eq 13 applies the candidate for one step only).
+# Longer windows such as F[0,2] G[0,8] p would hide that effect; they need a model
+# with recovery dynamics (Milestone 3). Measured violations are recorded in the
+# certificate.
 intents:
   - name: urllc_latency
-    formula: "G[0,10](latency_p99_ms.urllc <= 1.0)"
-    description: URLLC p99 latency stays at or below 1 ms over the horizon.
+    formula: "G[1,10](latency_p99_ms.urllc <= 1.0)"
+    description: URLLC p99 latency is at or below 1 ms from the next slot through the horizon.
 
   - name: embb_latency
-    formula: "G[0,10](latency_p99_ms.embb <= 40.0)"
-    description: eMBB p99 latency stays at or below 40 ms over the horizon.
+    formula: "G[1,10](latency_p99_ms.embb <= 40.0)"
+    description: eMBB p99 latency is at or below 40 ms from the next slot through the horizon.
 
+  - name: mmtc_latency
+    formula: "G[1,10](latency_p99_ms.mmtc <= 20.0)"
+    description: mMTC p99 latency is at or below 20 ms from the next slot through the horizon.
+
+  # Disabled: the Stage 1 nominal model does not predict loss (audit M5), so loss can
+  # only be checked on the current measurement, and no action can repair a measured
+  # violation (audit H3) - it would block the fallback. Re-enable once the model
+  # predicts loss (Milestone 3 calibration).
   - name: mmtc_loss
-    # The Stage 1 nominal model does not predict loss (audit M5), so this intent is
-    # checked on the current measurement only; a G[0,10] version would be vacuous.
+    enabled: false
     formula: "loss_rate.mmtc <= 0.02"
     description: Measured mMTC packet loss is at or below 2 %.
 
   # Example of a bounded-response intent (disabled): if URLLC latency exceeds
   # 1 ms, it must recover within 3 slots. Required horizon = 7 + 3 = 10.
   # ("not ok -> F ok" is written as "ok | F ok"; there is no '->' in the grammar.)
+  # Caution (audit H3): its F[0,3] window can skip k = 1, where the candidate's effect
+  # appears, so do not enable it until the model has recovery dynamics.
   - name: urllc_recovery
     enabled: false
     formula: "G[0,7]( (latency_p99_ms.urllc <= 1.0) | F[0,3](latency_p99_ms.urllc <= 1.0) )"

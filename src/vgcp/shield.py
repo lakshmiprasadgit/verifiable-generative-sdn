@@ -48,7 +48,7 @@ from vgcp.models import (
 )
 from vgcp.signals import ACTION_PREFIX, step_signals
 from vgcp.state import Demand, MetricStatus, NetworkState, Observation, ObservationSchema
-from vgcp.stl import Trace, evaluate, signal_offsets, signals
+from vgcp.stl import Trace, evaluate, predicates, signal_offsets, signals
 
 
 class CheckStatus(str, Enum):
@@ -89,6 +89,9 @@ class Certificate:
     now_s: float | None = None
     state_fingerprint: str | None = None
     demand_fingerprint: str | None = None
+    # "intent: signal" for each predicate the measured state s_t already violates
+    # (audit H3). Informational: recovery-style intents can still be certified.
+    measured_violations: tuple[str, ...] = ()
 
     def authorizes(self, action: Any) -> bool:
         """True only if this certificate accepted exactly ``action``; fails closed.
@@ -129,6 +132,7 @@ class Certificate:
             "now_s": self.now_s,
             "state_fingerprint": self.state_fingerprint,
             "demand_fingerprint": self.demand_fingerprint,
+            "measured_violations": list(self.measured_violations),
         })
 
 
@@ -210,6 +214,7 @@ class VerificationShield:
     def verify(self, state: NetworkState, demand: Demand, action: Any, now_s: float) -> Certificate:
         checks: list[CheckResult] = []
         robustness: dict[str, float | None] = {}
+        violations: list[str] = []
         c_now: dict[str, float | None] = {}
         in_domain: bool | None = None
         t = state.t if isinstance(state, NetworkState) else -1
@@ -222,7 +227,7 @@ class VerificationShield:
         except OverflowError:
             bound_now = None
         try:
-            in_domain = self._run_checks(state, demand, action, now_s, checks, robustness, c_now)
+            in_domain = self._run_checks(state, demand, action, now_s, checks, robustness, c_now, violations)
         except Exception as exc:  # an exception must never turn into acceptance
             checks.append(CheckResult("internal_error", CheckStatus.UNKNOWN, repr(exc)))
         accepted = bool(checks) and all(c.status in _ACCEPTABLE for c in checks)
@@ -233,6 +238,7 @@ class VerificationShield:
             action=bound_action, action_fingerprint=bound_fp,
             now_s=bound_now,
             state_fingerprint=state_fp, demand_fingerprint=demand_fp,
+            measured_violations=tuple(dict.fromkeys(violations)),
         )
 
     def rollout(self, state: NetworkState, action: ControlAction, demand: Demand) -> Rollout:
@@ -254,7 +260,7 @@ class VerificationShield:
         return Rollout(tuple(states), tuple(actions), tuple(flags), tuple(notes))
 
     # ---------------------------------------------------------------- checks
-    def _run_checks(self, state, demand, action, now_s, checks, robustness, c_now) -> bool | None:
+    def _run_checks(self, state, demand, action, now_s, checks, robustness, c_now, violations) -> bool | None:
         intent_names = [f"intent:{it.name}" for it in self.intents]
         later = ["hard_constraints_now", "nominal_model_domain", "fallback_continuation",
                  "hard_constraints_rollout", *intent_names]
@@ -315,6 +321,10 @@ class VerificationShield:
             for s, a in zip(roll.states, roll.actions)
         ])
         for it in self.intents:
+            for p in predicates(it.formula):
+                x = trace.value(p.signal, 0)  # the measured state s_t (and a_t)
+                if x == x and p.value(x) < 0:  # x == x excludes NaN
+                    violations.append(f"{it.name}: {p.signal}")
             res = evaluate(it.formula, trace, 0)
             robustness[it.name] = res.robustness
             if res.robustness is None:

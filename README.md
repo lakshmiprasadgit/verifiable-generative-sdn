@@ -66,7 +66,7 @@ Read first: [docs/milestone1_design.md](docs/milestone1_design.md) and
 
 ## Known limitations and open audit findings
 
-An independent audit of Milestone 1 found issues; six are fixed:
+An independent audit of Milestone 1 found issues; all are addressed:
 
 * **C1 (fixed)** - non-finite measurement timestamps no longer pass freshness checks.
 * **H2 (fixed)** - unknown or misspelled configuration keys and non-string
@@ -87,6 +87,10 @@ An independent audit of Milestone 1 found issues; six are fixed:
 * **H1 (fixed)** - traffic outside the managed slices is measured per link
   (`background_load_mbps`) and counted by the capacity constraint and the nominal
   model. Milestone 2 must provide it (port rate minus managed flow rates).
+* **H3 (fixed)** - intents are recovery-style (`G[1,10] p`): the measured slot is
+  excused, so the fallback can be certified while recovering from a measured
+  violation, and the candidate's effect is still checked. Certificates list
+  measured violations. The measurement-only loss intent is disabled.
 * **M4 (fixed)** - predicates are normalized by a declared scale per signal
   family, so robustness is unitless and one global rho_min applies, as in Eq 17.
   Per-intent margins are retired.
@@ -102,11 +106,7 @@ An independent audit of Milestone 1 found issues; six are fixed:
   comparison at rho_min) are documented; L5 is revisited with real data in
   Milestone 3.
 
-Unresolved:
-
-* **H3** - with intents evaluated from the measured state, the fallback policy is
-  rejected whenever the current measurement already violates an intent, so the
-  paper's recursive-feasibility assumption cannot hold in such states.
+No audit finding remains open; M3's enforcement waits for the Milestone 4 apply step.
 
 Other limitations: the nominal model is uncalibrated and not shown to be
 conservative; the fallback policy's recursive feasibility is not checked; shield
