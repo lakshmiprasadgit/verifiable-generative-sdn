@@ -32,7 +32,7 @@ from vgcp.loop import (
     UncheckedApplier,
     UnshieldedController,
 )
-from vgcp.shield import VerificationShield
+from vgcp.shield import VerificationShield, fallback_policy
 from vgcp.sim import Scenario, SimulatedNetwork
 from vgcp.stl import predicates
 
@@ -56,11 +56,11 @@ def build_controller(cfg: ProjectConfig, mode: str, backend, seed: int, n_random
     gen = HeuristicCandidateGenerator(cfg, n_random=n_random, seed=seed,
                                       preference="fitted-first" if mode == "unshielded-fitted" else "greedy")
     if mode == "shielded":
-        return ShieldedController(cfg, shield, gen, CertifiedApplier(backend, cfg.fallback_action, cfg.shield.max_staleness_s))
+        return ShieldedController(cfg, shield, gen, CertifiedApplier(backend, fallback_policy(cfg), cfg.shield.max_staleness_s))
     if mode in ("unshielded", "unshielded-fitted"):
         return UnshieldedController(cfg, gen, UncheckedApplier(backend), shadow_shield=shield)
     if mode == "fallback-only":
-        return FallbackOnlyController(cfg, shield, CertifiedApplier(backend, cfg.fallback_action, cfg.shield.max_staleness_s))
+        return FallbackOnlyController(cfg, shield, CertifiedApplier(backend, fallback_policy(cfg), cfg.shield.max_staleness_s))
     raise ValueError(f"unknown mode {mode!r}; choose from {MODES}")
 
 

@@ -10,9 +10,9 @@ NetworkBackend.apply() and refuses an action unless
   3. the certificate is not older than max_age_s on the controller clock.
 
 The one exception is the fallback pi_0, which paper Remark 1 deploys when no
-candidate is certified. It is applied without a certificate, but only if it is
-exactly the configured pi_0, and the record says whether pi_0 itself was certified
-(if not, Assumption 3 failed in that state).
+candidate is certified. The applier computes pi_0(s_t) itself from the observation,
+so no caller can pass a different action off as the fallback; the controller records
+whether pi_0 was itself certified (if not, Assumption 3 failed in that state).
 
 UncheckedApplier exists only for the unshielded baseline and says so in its name.
 """
@@ -22,8 +22,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from vgcp.action import ControlAction, action_fingerprint
+from vgcp.action import ControlAction
 from vgcp.loop.interfaces import ControllerFailure, NetworkBackend, Observation
+from vgcp.models import FallbackPolicy
 from vgcp.shield import Certificate, observation_fingerprint
 
 
@@ -40,11 +41,11 @@ class ApplyRecord:
 
 
 class CertifiedApplier:
-    def __init__(self, backend: NetworkBackend, fallback: ControlAction, max_age_s: float) -> None:
+    def __init__(self, backend: NetworkBackend, fallback: FallbackPolicy, max_age_s: float) -> None:
         if not (math.isfinite(max_age_s) and max_age_s >= 0):
             raise ValueError("max_age_s must be a finite number >= 0")
         self._backend = backend
-        self._fallback_fp = action_fingerprint(fallback)
+        self.fallback = fallback
         self.max_age_s = max_age_s
 
     def apply_certified(self, action: ControlAction, cert: Certificate, obs: Observation) -> ApplyRecord:
@@ -60,10 +61,11 @@ class CertifiedApplier:
             )
         return self._apply(action, "certified")
 
-    def apply_fallback(self, action: ControlAction, reason: str) -> ApplyRecord:
-        if action_fingerprint(action) != self._fallback_fp:
-            raise UnauthorizedActionError("only the configured fallback pi_0 may be applied without a certificate")
-        return self._apply(action, "fallback", reason)
+    def fallback_action(self, obs: Observation) -> ControlAction:
+        return self.fallback.act(obs.state)
+
+    def apply_fallback(self, obs: Observation, reason: str) -> ApplyRecord:
+        return self._apply(self.fallback_action(obs), "fallback", reason)
 
     def _apply(self, action: ControlAction, kind: str, detail: str = "") -> ApplyRecord:
         try:

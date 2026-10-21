@@ -91,9 +91,9 @@ class ShieldedController:
             return _record(obs.t, self.mode, cand.label, rec, measured_violations=list(cert.measured_violations),
                            verify_time_s=verify, decision_time_s=time.perf_counter() - t0, **common)
         v0 = time.perf_counter()
-        fb_cert = self.shield.verify(obs.state, obs.demand, self.cfg.fallback_action, obs.now_s)
+        fb_cert = self.shield.verify(obs.state, obs.demand, self.applier.fallback_action(obs), obs.now_s)
         verify += time.perf_counter() - v0
-        rec = self.applier.apply_fallback(self.cfg.fallback_action, "no candidate certified")
+        rec = self.applier.apply_fallback(obs, "no candidate certified")
         return _record(obs.t, self.mode, "fallback", rec, fallback_certified=fb_cert.accepted,
                        measured_violations=list(fb_cert.measured_violations),
                        verify_time_s=verify, decision_time_s=time.perf_counter() - t0, **common)
@@ -128,9 +128,9 @@ class FallbackOnlyController:
 
     def step(self, obs: Observation) -> StepRecord:
         t0 = time.perf_counter()
-        cert = self.shield.verify(obs.state, obs.demand, self.cfg.fallback_action, obs.now_s)
+        cert = self.shield.verify(obs.state, obs.demand, self.applier.fallback_action(obs), obs.now_s)
         verify = time.perf_counter() - t0
-        rec = self.applier.apply_fallback(self.cfg.fallback_action, "fallback-only baseline")
+        rec = self.applier.apply_fallback(obs, "fallback-only baseline")
         return _record(obs.t, self.mode, "fallback", rec, fallback_certified=cert.accepted,
                        measured_violations=list(cert.measured_violations),
                        verify_time_s=verify, decision_time_s=time.perf_counter() - t0)

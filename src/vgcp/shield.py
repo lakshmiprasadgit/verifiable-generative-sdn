@@ -40,6 +40,7 @@ from vgcp.constraints import ConstraintVector, HardConstraints
 from vgcp.errors import ConfigError, is_finite_real, is_real, json_safe
 from vgcp.models import (
     AnalyticNominalModel,
+    CapacityAwareFallbackPolicy,
     UpperBoundConstantForecast,
     DemandForecast,
     FallbackPolicy,
@@ -136,6 +137,13 @@ class Certificate:
         })
 
 
+def fallback_policy(config: ProjectConfig) -> FallbackPolicy:
+    if config.shield.fallback_policy == "capacity_aware":
+        return CapacityAwareFallbackPolicy(config.fallback_action, config.topology, config.slices,
+                                           config.constraints.max_reserved_fraction)
+    return StaticFallbackPolicy(config.fallback_action)
+
+
 def observation_fingerprint(obs: Any) -> str | None:
     """SHA-256 identifying a measured state or demand exactly: type, slot, and every
     metric's key, value and timestamp (via repr, so floats are exact and 0 != 0.0).
@@ -205,7 +213,7 @@ class VerificationShield:
         return cls(
             config,
             AnalyticNominalModel(config.topology, names, config.nominal_model),
-            StaticFallbackPolicy(config.fallback_action),
+            fallback_policy(config),
             UpperBoundConstantForecast(config.demand_schema, config.shield.forecast_margin),
             HardConstraints(config.constraints, config.topology, config.slices),
         )

@@ -16,6 +16,7 @@ from vgcp.loop import (
     UncheckedApplier,
     UnshieldedController,
 )
+from vgcp.models import StaticFallbackPolicy
 from vgcp.state import Measurement, NetworkState
 
 
@@ -40,7 +41,7 @@ def backend():
 
 @pytest.fixture
 def applier(cfg, backend):
-    return CertifiedApplier(backend, cfg.fallback_action, max_age_s=cfg.shield.max_staleness_s)
+    return CertifiedApplier(backend, StaticFallbackPolicy(cfg.fallback_action), max_age_s=cfg.shield.max_staleness_s)
 
 
 # ---------------------------------------------------------------- enforcement point
@@ -84,14 +85,14 @@ def test_stale_certificate_is_refused(cfg, shield, backend, applier):
         applier.apply_certified(cfg.fallback_action, cert, later)
 
 
-def test_only_the_configured_fallback_bypasses_certification(cfg, backend, applier):
-    assert applier.apply_fallback(cfg.fallback_action, "test").kind == "fallback"
-    with pytest.raises(UnauthorizedActionError, match="fallback"):
-        applier.apply_fallback(action_with(cfg, path={"embb": "C"}), "test")
+def test_fallback_is_computed_by_the_applier_not_passed_in(cfg, backend, applier):
+    # apply_fallback takes the observation, not an action: pi_0(s_t) cannot be substituted.
+    rec = applier.apply_fallback(_obs(cfg), "test")
+    assert rec.kind == "fallback" and backend.applied == [cfg.fallback_action]
 
 
 def test_controller_failure_is_recorded_not_raised(cfg, shield):
-    applier = CertifiedApplier(RecordingBackend(fail=True), cfg.fallback_action, 2.0)
+    applier = CertifiedApplier(RecordingBackend(fail=True), StaticFallbackPolicy(cfg.fallback_action), 2.0)
     obs = _obs(cfg)
     cert = shield.verify(obs.state, obs.demand, cfg.fallback_action, obs.now_s)
     rec = applier.apply_certified(cfg.fallback_action, cert, obs)

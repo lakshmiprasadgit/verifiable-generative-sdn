@@ -17,7 +17,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from vgcp.config import load_config
+import copy
+
+from vgcp.config import build_config, load_config
 from vgcp.experiments.runner import MODES, aggregate, dumps, run_trial, summarize
 from vgcp.sim import load_scenario
 
@@ -46,10 +48,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--modes", nargs="+", default=list(MODES), choices=MODES)
     ap.add_argument("--seeds", default="1-5")
     ap.add_argument("--n-random", type=int, default=4)
+    ap.add_argument("--fallback-policy", choices=("static", "capacity_aware"),
+                    help="override shield.fallback_policy from the configuration")
     ap.add_argument("--out", default=str(ROOT / "experiments" / "results" / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")))
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
+    if args.fallback_policy:
+        raw = copy.deepcopy(dict(cfg.raw))
+        raw["shield"]["fallback_policy"] = args.fallback_policy
+        cfg = build_config(raw, source=f"{args.config} (fallback_policy={args.fallback_policy})")
     slices = {s.name for s in cfg.slices}
     scenarios = [load_scenario(p, slices, set(cfg.topology.links)) for p in args.scenarios]
     seeds = _seeds(args.seeds)
@@ -64,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
         "python": platform.python_version(),
         "backend": "simulated",
         "config_hash": cfg.config_hash,
+        "fallback_policy": cfg.shield.fallback_policy,
         "scenarios": {s.name: {"file": str(p), "digest": s.digest} for s, p in zip(scenarios, args.scenarios)},
         "modes": args.modes, "seeds": seeds, "n_random": args.n_random,
     }

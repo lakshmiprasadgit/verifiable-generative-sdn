@@ -45,6 +45,7 @@ class Intent:
 class ShieldSettings:
     max_staleness_s: float
     check_constraints_along_rollout: bool
+    fallback_policy: str  # "static" | "capacity_aware"
     forecast_margin: float
 
 
@@ -132,6 +133,13 @@ def _bounds(section: Any, families: Mapping[str, Any], ctx: str) -> dict[str, tu
     return {f: _pair(section[f], f"{ctx}.{f}", _num) for f in families}
 
 
+def _fallback_policy(v: str) -> str:
+    from vgcp.models.fallback import POLICIES
+    if v not in POLICIES:
+        raise ConfigError(f"shield.fallback_policy: {v!r} is not one of {list(POLICIES)}")
+    return v
+
+
 def signal_family(signal: str) -> str:
     """'latency_p99_ms.urllc' -> 'latency_p99_ms'; 'action.rate_budget_mbps.embb' ->
     'action.rate_budget_mbps'; a global metric such as 'energy_w' is its own family."""
@@ -210,6 +218,7 @@ _SCHEMA = _Obj({
     "shield": _Obj({
         "measurements": _Obj({"max_staleness_s": None}),
         "check_constraints_along_rollout": None,
+        "fallback_policy": _STR,
         "demand_forecast": _Obj({"type": _STR, "margin": None}),
         "nominal_model": _Obj({
             "calibration_status": _STR,  # optional, default "uncalibrated"
@@ -395,6 +404,7 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
         check_constraints_along_rollout=_bool(
             _get(shield_raw, "check_constraints_along_rollout", "shield"),
             "shield.check_constraints_along_rollout"),
+        fallback_policy=_fallback_policy(_get(shield_raw, "fallback_policy", "shield")),
         forecast_margin=_num(_get(fc, "margin", "shield.demand_forecast"),
                              "shield.demand_forecast.margin", lo=0.0),
     )

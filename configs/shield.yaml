@@ -24,7 +24,12 @@ nominal_model:
   link_idle_power_w: 1.0
   link_dynamic_power_w: 2.0
 
-# Static fallback action pi_0 (Eq 13). Must be in A (checked at load).
+# Fallback policy pi_0 (Eq 13): "static" applies fallback_action in every state;
+# "capacity_aware" starts from it and moves/shrinks the eMBB reservation to fit the
+# measured background load. See src/vgcp/models/fallback.py and docs/DECISIONS.md.
+fallback_policy: static
+
+# Base fallback action (the static pi_0). Must be in A (checked at load).
 # Assumption 3 (recursive feasibility) is NOT yet established; Milestone 4.
 fallback_action:
   path: {urllc: A, embb: B, mmtc: C}
