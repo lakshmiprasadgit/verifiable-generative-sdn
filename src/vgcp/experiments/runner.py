@@ -162,6 +162,9 @@ def summarize(cfg: ProjectConfig, scenario: Scenario, rows: list[dict[str, Any]]
         "max_link_util": max((u for r in rows for u in map(_num, r["truth_next"]["link_util"].values())
                               if not math.isnan(u)), default=None),
         "candidate_rejection_rate": (verified - certified) / verified if verified else None,
+        # bandwidth reserved by the applied actions (Eq 27's cost term); outcome metrics
+        # cannot show it when every budget exceeds demand
+        "mean_reserved_mbps": statistics.fmean(sum(s["action"]["rate_budget_mbps"].values()) for s in steps),
         "fallback_slots": sum(s["kind"] == "fallback" for s in steps),
         "uncertified_fallback_slots": sum(s["fallback_certified"] is False for s in steps),
         "shadow_rejected_applied_slots": sum(s["shield_would_accept"] is False for s in steps),

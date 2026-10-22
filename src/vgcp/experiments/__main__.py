@@ -136,6 +136,7 @@ COLUMNS = [
     ("uncertified_fallback_slots", "uncertified fallback"),
     ("shadow_rejected_applied_slots", "applied but shield-rejected"),
     ("max_link_util", "max link util"),
+    ("mean_reserved_mbps", "reserved Mbit/s (mean)"),
     ("recovery_slots", "recovery slots"),
     ("verify_time_ms_p95", "verify ms p95"),
 ]

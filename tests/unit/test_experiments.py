@@ -102,3 +102,9 @@ def test_overload_is_not_observable_on_measured_data(cfg):
     s = summarize(cfg, sc, rows)
     assert s["overload_slots"] is None and s["overload_observable"] is False
     assert s["reservation_violation_slots"] == 3
+
+
+def test_reserved_bandwidth_is_reported(cfg):
+    sc = scenario(cfg, slots=3)
+    s = summarize(cfg, sc, run_trial(cfg, sc, "fallback-only", 1, 0))
+    assert s["mean_reserved_mbps"] == pytest.approx(sum(cfg.fallback_action.rate_budget_mbps.values()), rel=0.2)
