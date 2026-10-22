@@ -51,10 +51,17 @@ def latency_thresholds(cfg: ProjectConfig) -> dict[str, float]:
     return out
 
 
-def build_controller(cfg: ProjectConfig, mode: str, backend, seed: int, n_random: int):
+def build_controller(cfg: ProjectConfig, mode: str, backend, seed: int, n_random: int,
+                     wrap_shield=None, wrap_generator=None):
+    """wrap_shield / wrap_generator (optional) receive the real shield / generator and
+    return a pass-through wrapper, e.g. to record certificates for the dashboard."""
     shield = VerificationShield.from_config(cfg)
     gen = HeuristicCandidateGenerator(cfg, n_random=n_random, seed=seed,
                                       preference="fitted-first" if mode == "unshielded-fitted" else "greedy")
+    if wrap_shield is not None:
+        shield = wrap_shield(shield)
+    if wrap_generator is not None:
+        gen = wrap_generator(gen)
     if mode == "shielded":
         return ShieldedController(cfg, shield, gen, CertifiedApplier(backend, fallback_policy(cfg), cfg.shield.max_staleness_s))
     if mode in ("unshielded", "unshielded-fitted"):

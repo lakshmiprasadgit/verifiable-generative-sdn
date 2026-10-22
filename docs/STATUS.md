@@ -35,6 +35,9 @@ campaign **has not run**, so there are no Mininet controller results yet.
   and fallback ablation. See [EXPERIMENTS.md](EXPERIMENTS.md).
 * State-dependent fallback π₀(s), now the default after the ablation.
   See [DECISIONS.md](DECISIONS.md).
+* Control-loop dashboard (`scripts/run_dashboard.sh`, no root): steps the real loop on
+  the simulated network and shows candidates, certificates, fallbacks, outcomes and
+  saved campaigns. See the README.
 
 ## First Mininet run (2026-10-21, `experiments/results/mininet-20261021T171037Z/`)
 

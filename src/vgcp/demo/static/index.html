@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VGCP Control Loop</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5f6b7a; --line: #d9dee5; --soft: #eef1f5;
+  --accent: #2f6fdb; --ok: #1f8a4c; --okbg: #e3f4ea; --bad: #c0362c; --badbg: #fbe7e5; --warn: #a86400; --warnbg: #fdf0db;
+  --unk: #6b5bb5; --unkbg: #eeeafb; --urllc: #d9480f; --embb: #1971c2; --mmtc: #2b8a3e; --bgtraffic: #868e96;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #1a1e24; --ink: #e6e9ee; --muted: #9aa5b4; --line: #2f3640; --soft: #222831;
+    --accent: #6ea0ff; --ok: #4cc27f; --okbg: #17301f; --bad: #ff6b5e; --badbg: #3a1c1a; --warn: #f0a33a; --warnbg: #3a2a12;
+    --unk: #a598f0; --unkbg: #26223d; --urllc: #ff8a4c; --embb: #5aa9ff; --mmtc: #5fd27a; --bgtraffic: #aab3bd;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1a1e24; --ink: #e6e9ee; --muted: #9aa5b4; --line: #2f3640; --soft: #222831;
+  --accent: #6ea0ff; --ok: #4cc27f; --okbg: #17301f; --bad: #ff6b5e; --badbg: #3a1c1a; --warn: #f0a33a; --warnbg: #3a2a12;
+  --unk: #a598f0; --unkbg: #26223d; --urllc: #ff8a4c; --embb: #5aa9ff; --mmtc: #5fd27a; --bgtraffic: #aab3bd;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font-size: 17px; margin: 0; }
+.brand .sub { color: var(--muted); font-size: 12.5px; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-top: 8px; }
+.controls label { display: flex; flex-direction: column; font-size: 11.5px; color: var(--muted); gap: 2px; }
+select, input, button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+input[type=number] { width: 64px; }
+button { cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.tabs { display: flex; gap: 4px; margin-left: auto; }
+.tabs button.active { border-color: var(--accent); color: var(--accent); }
+main { padding: 14px 16px 40px; max-width: 1500px; margin: 0 auto; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 1050px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--soft); color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.tag.ok { background: var(--okbg); color: var(--ok); } .tag.bad { background: var(--badbg); color: var(--bad); }
+.tag.warn { background: var(--warnbg); color: var(--warn); } .tag.unk { background: var(--unkbg); color: var(--unk); }
+.status { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.status b { color: var(--ink); }
+svg text { fill: var(--ink); }
+.stages { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 700px) { .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stage { border: 1px solid var(--line); border-radius: 8px; padding: 6px 7px; font-size: 12px; min-height: 74px; transition: background .15s, border-color .15s; }
+.stage .n { font-size: 10.5px; color: var(--muted); }
+.stage .h { font-weight: 600; }
+.stage .v { color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow-wrap: anywhere; }
+.stage.active { border-color: var(--accent); background: var(--soft); }
+.badge { display: inline-block; font-weight: 700; padding: 6px 12px; border-radius: 8px; letter-spacing: .02em; }
+.badge.ok { background: var(--okbg); color: var(--ok); } .badge.bad { background: var(--badbg); color: var(--bad); }
+.badge.warn { background: var(--warnbg); color: var(--warn); } .badge.unk { background: var(--unkbg); color: var(--unk); }
+.pv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+.pv > div { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; }
+.pv .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+tr.sel td { background: var(--okbg); }
+tr.cand { cursor: pointer; }
+tr.cand:hover td { background: var(--soft); }
+tr.sel:hover td { background: var(--okbg); }
+td.num { font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+.checks { margin: 4px 0 2px 0; padding: 0; list-style: none; font-size: 12px; }
+.checks li { padding: 1px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+.card .k { font-size: 11.5px; color: var(--muted); }
+.card .v { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.card .s { font-size: 11px; color: var(--muted); }
+.card .v.na { color: var(--unk); font-size: 15px; }
+.charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+@media (max-width: 700px) { .charts { grid-template-columns: minmax(0, 1fr); } .pv { grid-template-columns: minmax(0, 1fr); } }
+.chart .t { font-size: 12px; font-weight: 600; } .chart .src { font-size: 11px; color: var(--muted); }
+.legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+.timeline { max-height: 340px; overflow-y: auto; font-size: 12.5px; }
+.ev { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--soft); }
+.ev .tt { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev.certified .x { color: var(--ok); } .ev.uncertified .x, .ev.violation .x, .ev.failure .x { color: var(--bad); font-weight: 600; }
+.ev.fallback .x, .ev.pending .x { color: var(--warn); } .ev.missing .x { color: var(--unk); } .ev.change .x { color: var(--accent); }
+.ev.unchecked .x { color: var(--warn); }
+.obs { font-size: 12px; }
+.obs td { padding: 3px 5px; }
+.hidden { display: none !important; }
+.banner { border: 1px solid var(--warn); background: var(--warnbg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; margin-bottom: 10px; }
+.err { color: var(--bad); font-size: 12.5px; }
+details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; font-size: 12.5px; }
+.kv div:nth-child(odd) { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>Verifiable Generative Control Plane — control-loop demo</h1>
+    <span class="sub">Stage 1 research prototype · heuristic candidates, analytic nominal model · not a safety guarantee</span>
+    <div class="tabs"><button id="tabLive" class="active">Live run</button><button id="tabHist">Saved campaigns</button>
+      <button id="theme" title="Toggle light/dark">◐</button></div>
+  </div>
+  <div class="controls" id="liveControls">
+    <label>Scenario<select id="scenario"></select></label>
+    <label>Controller<select id="controller"></select></label>
+    <label>Seed<input id="seed" type="number" min="0" value="1"></label>
+    <label>Backend<select id="backend"></select></label>
+    <label>Speed (ms / slot)<input id="speed" type="number" min="0" step="100" value="500"></label>
+    <button id="btnStart" class="primary">Start new run</button>
+    <button id="btnPlay" disabled>▶ Play</button>
+    <button id="btnStep" disabled>Step</button>
+    <button id="btnReset" disabled>Reset</button>
+  </div>
+  <div class="status" id="status">Loading…</div>
+</header>
+
+<main>
+<section id="live">
+  <div class="grid">
+    <div class="col">
+      <div class="panel">
+        <h2>Network topology <span class="tag" id="topoSrc">configs/network.yaml</span></h2>
+        <svg id="topo" viewBox="0 0 640 300" width="100%" role="img" aria-label="Network topology"></svg>
+        <div class="legend" id="topoLegend"></div>
+        <p class="note">Link colour and label: utilization in the slot just observed (simulator ground truth, or measured on Mininet).
+          Dashed grey = link powered off. Coloured lines = the path each slice is installed on.</p>
+      </div>
+      <div class="panel">
+        <h2>Control loop, slot <span id="slotNo">–</span></h2>
+        <div class="stages" id="stages"></div>
+      </div>
+      <div class="panel">
+        <h2>Decision</h2>
+        <div id="decision"><p class="note">Start a run and step through it.</p></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="panel">
+        <h2>Candidates and verification</h2>
+        <div id="candidates" class="tablewrap"><p class="note">No step yet.</p></div>
+      </div>
+      <div class="panel">
+        <h2>Metrics <span class="tag" id="metricSrc">–</span></h2>
+        <div class="cards" id="cards"></div>
+        <div class="charts" id="charts"></div>
+        <p class="note" id="metricNote"></p>
+      </div>
+    </div>
+  </div>
+  <div class="grid" style="margin-top:14px">
+    <div class="panel">
+      <h2>Event timeline <span class="tag">derived from this run's records</span></h2>
+      <div class="timeline" id="timeline"><p class="note">No events yet.</p></div>
+    </div>
+    <div class="panel">
+      <h2>Observation the controller used <span class="tag">telemetry, may be noisy, stale or missing</span></h2>
+      <div id="observation" class="tablewrap"><p class="note">No observation yet.</p></div>
+    </div>
+  </div>
+  <div class="panel hidden" id="summaryPanel" style="margin-top:14px">
+    <h2>Run summary</h2>
+    <div id="summary"></div>
+  </div>
+</section>
+
+<section id="hist" class="hidden">
+  <div class="panel">
+    <h2>Saved campaigns <span class="tag warn">historical data — not produced by the live run</span></h2>
+    <div class="controls"><label>Campaign<select id="histSel"></select></label></div>
+    <div id="histBody" style="margin-top:10px"></div>
+  </div>
+</section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const isNum = (v) => typeof v === "number" && Number.isFinite(v);
+const fmt = (v, d = 2) => isNum(v) ? (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(d)) : null;
+const NA = '<span class="tag unk">unavailable</span>';
+const SLICES = ["urllc", "embb", "mmtc"];
+const SLICE_COLOR = {urllc: "var(--urllc)", embb: "var(--embb)", mmtc: "var(--mmtc)"};
+const STAGES = [
+  ["Observe", "telemetry → state s_t"], ["Candidates", "heuristic generator"], ["Verify", "constraints + STL rollout"],
+  ["Certify", "certificate per candidate"], ["Select", "first certified, else π₀(s)"], ["Apply", "via applier → backend"],
+  ["Measure", "outcome at t+1"]];
+
+let META = null, RUN = null, playing = false, busy = false, history = [];
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function setStatus(html) { $("status").innerHTML = html; }
+
+// ------------------------------------------------------------------ theme and tabs
+(() => { try { const t = localStorage.getItem("vgcp-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {} })();
+$("theme").onclick = () => {
+  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("vgcp-theme", document.documentElement.dataset.theme); } catch (e) {}
+};
+$("tabLive").onclick = () => { $("live").classList.remove("hidden"); $("hist").classList.add("hidden"); $("liveControls").classList.remove("hidden");
+  $("tabLive").classList.add("active"); $("tabHist").classList.remove("active"); };
+$("tabHist").onclick = () => { $("hist").classList.remove("hidden"); $("live").classList.add("hidden"); $("liveControls").classList.add("hidden");
+  $("tabHist").classList.add("active"); $("tabLive").classList.remove("active"); loadHistory(); };
+
+// ------------------------------------------------------------------ topology
+let POS = {};
+function layout() {
+  const T = META.topology, W = 640, H = 300;
+  const pids = Object.keys(T.paths).sort();
+  const rows = pids.map((p, i) => 50 + i * ((H - 100) / Math.max(1, pids.length - 1)));
+  POS = {}; POS[T.ingress] = [70, H / 2]; POS[T.egress] = [W - 70, H / 2];
+  pids.forEach((pid, i) => {
+    const nodes = T.paths[pid].nodes;
+    nodes.forEach((n, j) => { if (!(n in POS)) POS[n] = [70 + (W - 140) * j / (nodes.length - 1), rows[i]]; });
+  });
+}
+function utilColor(u) {
+  if (!isNum(u)) return "var(--unk)";
+  if (u > 1.0) return "var(--bad)";
+  if (u > META.max_reserved_fraction) return "var(--warn)";
+  return "var(--muted)";
+}
+function drawTopo(state) {
+  const T = META.topology, svg = $("topo");
+  const util = state?.link_util || {}, installed = state?.installed, power = installed?.link_power || {};
+  let s = "";
+  for (const [lid, l] of Object.entries(T.links)) {
+    const [x1, y1] = POS[l.a], [x2, y2] = POS[l.b], off = power[lid] === false;
+    const u = util[lid];
+    s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${off ? "var(--line)" : utilColor(u)}" stroke-width="${off ? 2 : 3 + 7 * Math.min(1, isNum(u) ? u : 0)}" stroke-opacity="${off ? 1 : .35}" ${off ? 'stroke-dasharray="6 5"' : ""}/>`;
+  }
+  if (installed) {
+    SLICES.forEach((sl, k) => {
+      const p = T.paths[installed.path[sl]]; if (!p) return;
+      const d = (k - 1) * 5;
+      const pts = p.nodes.map((n) => `${POS[n][0]},${POS[n][1] + d}`).join(" ");
+      s += `<polyline points="${pts}" fill="none" stroke="${SLICE_COLOR[sl]}" stroke-width="2.4" stroke-linejoin="round"/>`;
+    });
+  }
+  for (const [lid, l] of Object.entries(T.links)) {
+    const [x1, y1] = POS[l.a], [x2, y2] = POS[l.b], u = util[lid], off = power[lid] === false;
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 9;
+    const ut = off ? "off" : (isNum(u) ? `${(100 * u).toFixed(0)}%` : (state ? "n/a" : ""));
+    s += `<text x="${mx}" y="${my}" font-size="10.5" text-anchor="middle">${lid} · ${l.capacity_mbps} Mb/s · ${l.delay_ms} ms${ut ? " · " + ut : ""}</text>`;
+  }
+  for (const [n, [x, y]] of Object.entries(POS)) {
+    const role = n === T.ingress ? "ingress" : n === T.egress ? "egress" : "";
+    s += `<circle cx="${x}" cy="${y}" r="15" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/>
+          <text x="${x}" y="${y + 4}" font-size="12" font-weight="600" text-anchor="middle">${n}</text>
+          ${role ? `<text x="${x}" y="${y + 31}" font-size="10" text-anchor="middle" style="fill:var(--muted)">${role}</text>` : ""}`;
+  }
+  const pids = Object.keys(T.paths).sort();
+  pids.forEach((pid) => {
+    const p = T.paths[pid], mid = POS[p.nodes[Math.floor(p.nodes.length / 2)]];
+    const cap = Math.min(...p.links.map((l) => T.links[l].capacity_mbps));
+    const delay = p.links.reduce((a, l) => a + T.links[l].delay_ms, 0);
+    s += `<text x="${mid[0]}" y="${mid[1] + (pid === pids[0] ? -22 : pid === pids[pids.length - 1] ? 34 : 24)}" font-size="11" text-anchor="middle" style="fill:var(--accent);font-weight:600">Path ${pid}: ${p.links.length} hops, ${cap} Mb/s, ${delay.toFixed(1)} ms</text>`;
+  });
+  svg.innerHTML = s;
+  const inst = installed ? SLICES.map((sl) => `<span><i style="background:${SLICE_COLOR[sl]}"></i>${sl.toUpperCase()} → path ${installed.path[sl]}</span>`).join("") : "";
+  $("topoLegend").innerHTML = inst + `<span><i style="background:var(--warn)"></i>util &gt; ${META.max_reserved_fraction} (reservation limit)</span>`;
+}
+
+// ------------------------------------------------------------------ loop stages
+function renderStages(step, active) {
+  const d = step?.decision, o = step?.observation;
+  const bad = o ? Object.values({...o.state, ...o.demand}).filter((m) => m.status !== "ok").length : 0;
+  const ctrl = RUN?.controller;
+  const vals = !step ? Array(7).fill("–") : [
+    `${Object.keys(o.state).length + Object.keys(o.demand).length} metrics` + (bad ? `, ${bad} unusable` : ""),
+    ctrl === "fallback-only" ? "not used (π₀ only)" : `${d.n_candidates} proposed`,
+    ctrl === "shielded" ? `${d.n_verified} verified` : ctrl === "fallback-only" ? "π₀ checked" : (d.shield_would_accept === null ? "none" : "shadow check of top only"),
+    ctrl === "shielded" ? `${d.n_certified} certified · ${d.n_verified - d.n_certified} rejected` : ctrl === "fallback-only" ? (d.fallback_certified ? "π₀ certified" : "π₀ NOT certified") : "no certificate (baseline)",
+    d.kind === "certified" ? `'${d.chosen}'` : d.kind === "fallback" ? "π₀(s) fallback" : `'${d.chosen}' unverified`,
+    d.applied ? (step.decision.changes.length ? step.decision.changes.length + " change(s)" : "no change") : "FAILED: not applied",
+    `t=${step.result.truth.t}` + (step.result.violations.any ? " · violation" : " · no violation")];
+  $("stages").innerHTML = STAGES.map(([h, sub], i) => `<div class="stage ${active === i ? "active" : ""}"><div class="n">${i + 1}. ${esc(sub)}</div>
+    <div class="h">${h}</div><div class="v">${esc(vals[i])}</div></div>`).join("");
+}
+async function animateStages(step) {
+  const delay = Math.min(90, Math.max(0, +$("speed").value / 9));
+  if (delay < 10) return renderStages(step, -1);
+  for (let i = 0; i < 7; i++) { renderStages(step, i); await new Promise((r) => setTimeout(r, delay)); }
+  renderStages(step, -1);
+}
+
+// ------------------------------------------------------------------ decision
+const BADGE_CLASS = {"CERTIFIED ACTION": "ok", "CERTIFIED FALLBACK": "warn", "UNCERTIFIED FALLBACK": "bad", "UNVERIFIED (baseline)": "warn", "NOT APPLIED": "bad"};
+function actionText(a) {
+  return SLICES.map((s) => `${s.toUpperCase()}: path ${a.path[s]}, ${fmt(a.rate_budget_mbps[s], 1)} Mb/s, adm ${a.admission_limit[s]}`).join("<br>")
+    + "<br>links " + Object.entries(a.link_power).map(([l, on]) => `${l} ${on ? "on" : "off"}`).join(", ");
+}
+function checkList(cert) {
+  if (!cert) return "";
+  const li = cert.checks.map((c) => `<li><span class="tag ${c.status === "pass" ? "ok" : c.status === "fail" ? "bad" : c.status === "unknown" ? "unk" : ""}">${c.status}</span> ${esc(c.name)} <span style="color:var(--muted)">${esc(c.detail)}</span></li>`).join("");
+  const sk = cert.skipped.length ? `<li style="color:var(--muted)">skipped after an earlier failure: ${esc(cert.skipped.join(", "))}</li>` : "";
+  return `<ul class="checks">${li}${sk}</ul>`;
+}
+function renderDecision(step) {
+  const d = step.decision, first = step.candidates[0];
+  let why = "";
+  if (d.badge === "UNCERTIFIED FALLBACK") why = `No candidate was certified, so the fallback π₀(s) was applied (paper Remark 1). The shield could <b>not</b> certify π₀ itself in this state
+      (Assumption 3 not met here). This action is <b>not shown to be safe</b>.`;
+  else if (d.badge === "CERTIFIED FALLBACK") why = d.chosen === "fallback" && RUN.controller === "fallback-only" ? "Fallback-only baseline: π₀(s) is always applied; here the shield also certified it." : "No candidate was certified; π₀(s) was applied and the shield certified it in this state.";
+  else if (d.badge === "CERTIFIED ACTION") why = "The applier checked that the certificate authorizes exactly this action for this observation before applying it. Certified = predicted to satisfy constraints and intents under the nominal model; not a guarantee for the real network.";
+  else if (d.badge === "UNVERIFIED (baseline)") why = `Baseline controller: the top candidate was applied without verification.` + (d.shield_would_accept === false ? " The shadow shield would have <b>rejected</b> it." : d.shield_would_accept === true ? " The shadow shield would have accepted it." : "");
+  else why = "The backend refused the action (controller failure); the network keeps its previous configuration.";
+  const proposed = first ? `<b>${esc(first.label)}</b> <span class="tag ${first.role === "selected" ? "ok" : first.role === "rejected" ? "bad" : "warn"}">${esc(first.role)}</span>` : "— (no candidates: fallback-only)";
+  const fbc = d.fallback_certificate ? `<details ${d.badge === "UNCERTIFIED FALLBACK" ? "open" : ""}><summary>π₀(s) certificate</summary>${checkList(d.fallback_certificate)}</details>` : "";
+  $("decision").innerHTML = `<span class="badge ${BADGE_CLASS[d.badge] || "unk"}">${esc(d.badge)}</span>
+    <p class="note" style="color:var(--ink)">${why}</p>
+    <div class="pv"><div><div class="k">Generator's first choice (proposed)</div>${proposed}</div>
+      <div><div class="k">Applied action</div><b>${esc(d.chosen)}</b>${d.applied ? "" : ' <span class="tag bad">not applied</span>'}<br><span style="font-size:12px">${actionText(d.action)}</span></div></div>
+    <p class="note">Changes vs. installed: ${d.changes.length ? esc(d.changes.join("; ")) : "none"} · verify ${fmt(1000 * d.verify_time_s, 1)} ms · decision ${fmt(1000 * d.decision_time_s, 1)} ms</p>${fbc}`;
+}
+
+// ------------------------------------------------------------------ candidates
+function renderCandidates(step) {
+  const c = step.candidates;
+  if (!c.length) { $("candidates").innerHTML = '<p class="note">Fallback-only controller: no candidates are generated; π₀(s) is checked and applied every slot.</p>'; return; }
+  const intents = META.intents.map((i) => i.name);
+  const rows = c.map((x, i) => {
+    const cert = x.certificate;
+    const verdict = !cert ? '<span class="tag">not verified</span>' : x.shadow ? `<span class="tag ${cert.accepted ? "ok" : "bad"}">shadow: ${cert.accepted ? "would accept" : "would reject"}</span>`
+      : `<span class="tag ${cert.accepted ? "ok" : "bad"}">${cert.accepted ? "certified" : "rejected"}</span>`;
+    const why = cert && !cert.accepted ? cert.primary_failures.map((f) => esc(f)).join(", ") : "";
+    const rho = cert ? intents.map((n) => { const r = cert.robustness?.[n]; return isNum(r) ? `<span style="color:${r >= (cert.rho_min[n] ?? 0) ? "var(--ok)" : "var(--bad)"}">${r.toFixed(2)}</span>` : "–"; }).join(" / ") : "–";
+    const role = x.role === "selected" ? '<span class="tag ok">selected</span>' : x.role === "applied without verification" ? '<span class="tag warn">applied unverified</span>' : `<span class="tag">${esc(x.role)}</span>`;
+    const a = x.action;
+    return `<tr class="cand ${x.role === "selected" || x.role === "applied without verification" ? "sel" : ""}" data-i="${i}">
+      <td><b>${esc(x.label)}</b></td><td>${SLICES.map((s) => a.path[s]).join(" ")}</td>
+      <td class="num">${SLICES.map((s) => fmt(a.rate_budget_mbps[s], 1)).join(" / ")}</td>
+      <td>${verdict}</td><td>${why}</td><td class="num">${rho}</td><td>${role}</td></tr>
+      <tr class="hidden" id="cd${i}"><td colspan="7">${cert ? checkList(cert) : "Not verified by this controller."}</td></tr>`;
+  }).join("");
+  $("candidates").innerHTML = `<table><thead><tr><th>candidate</th><th>paths U E M</th><th>budget Mb/s U / E / M</th><th>verification</th><th>failed check</th>
+    <th>robustness ${intents.map((n) => n.replace("_latency", "")).join(" / ")}</th><th>role</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="note">Click a row for its certificate checks. Robustness ≥ ρ_min = ${META.intents[0]?.rho_min} passes (normalized, H=${META.horizon_H}).
+    Admission limits are the same for every candidate in this generator.</p>`;
+  document.querySelectorAll("tr.cand").forEach((tr) => tr.onclick = () => $("cd" + tr.dataset.i).classList.toggle("hidden"));
+}
+
+// ------------------------------------------------------------------ metrics
+function labels() {
+  const mn = RUN?.backend === "mininet";
+  return {
+    src: mn ? "Mininet: measured at t+1 (not ground truth)" : "simulator ground truth at t+1 (simulation, not a real network)",
+    lat: mn ? "max of 8 probes (RTT/2)" : "p99 (simulator model)",
+    note: mn ? "Mininet values are emulated-network measurements. Offered load, background, loss and throughput come from flow counters that are provisional (reroute resets, pre-meter ingress counters, counter steps). Overload cannot be observed: link utilization is post-shaping."
+      : "Outcome values are the simulator's ground truth for the slot after the decision; the controller only saw the noisy telemetry shown under 'Observation'. Simulation results say nothing about real-network safety.",
+  };
+}
+function card(k, v, unit, sub, cls) {
+  return `<div class="card"><div class="k">${esc(k)}</div>${v === null ? `<div class="v na">unavailable</div>` : `<div class="v" style="${cls || ""}">${v}<span style="font-size:12px;font-weight:500"> ${unit}</span></div>`}<div class="s">${sub}</div></div>`;
+}
+function renderMetrics(step) {
+  const L = labels(), tr = step.result.truth, B = META.latency_bounds_ms;
+  $("metricSrc").textContent = L.src; $("metricNote").textContent = L.note;
+  const all = RUN.steps;
+  const fb = all.filter((s) => s.decision.kind === "fallback").length, unc = all.filter((s) => s.decision.badge === "UNCERTIFIED FALLBACK").length;
+  const maxU = Object.values(tr.link_util).filter(isNum);
+  const latCard = (s) => { const v = tr.latency_p99_ms[s]; return card(`${s.toUpperCase()} latency, ${L.lat}`, fmt(v, 3), "ms", `bound ${B[s]} ms`, isNum(v) && v > B[s] ? "color:var(--bad)" : ""); };
+  $("cards").innerHTML = [
+    latCard("urllc"),
+    card("eMBB delivered", fmt(tr.throughput_mbps.embb, 1), "Mb/s", `offered ${fmt(tr.offered_mbps.embb, 1) ?? "unavailable"} Mb/s`),
+    latCard("mmtc"),
+    card("Max link utilization", maxU.length ? fmt(Math.max(...maxU), 3) : null, "", `limit ${META.max_reserved_fraction}` + (RUN.backend === "mininet" ? " · post-shaping" : "")),
+    card("Loss (worst slice)", (() => { const v = Object.values(tr.loss).filter(isNum); return v.length ? fmt(Math.max(...v), 3) : null; })(), "", RUN.backend === "mininet" ? "provisional (counter-derived)" : "simulated drops"),
+    card("Verification time", fmt(1000 * step.decision.verify_time_s, 1), "ms", "this slot, all checks"),
+    card("Rejected candidates", RUN.controller === "shielded" ? String(step.decision.n_verified - step.decision.n_certified) : null, "", RUN.controller === "shielded" ? `of ${step.decision.n_verified} this slot` : "not verified by this controller"),
+    card("Fallback activations", String(fb), "", `${unc} uncertified · in ${all.length} slots`, unc ? "color:var(--bad)" : ""),
+  ].join("");
+  const xs = all.map((s) => s.result.truth.t);
+  const series = (f) => all.map((s) => { const v = f(s.result.truth); return isNum(v) ? v : null; });
+  $("charts").innerHTML = [
+    chart("URLLC latency (ms) — " + L.lat, xs, [{name: "URLLC", color: "var(--urllc)", v: series((t) => t.latency_p99_ms.urllc)}], B.urllc),
+    chart("eMBB throughput (Mb/s)", xs, [{name: "delivered", color: "var(--embb)", v: series((t) => t.throughput_mbps.embb)},
+                                         {name: "offered", color: "var(--muted)", v: series((t) => t.offered_mbps.embb), dash: true}]),
+    chart("mMTC latency (ms) — " + L.lat, xs, [{name: "mMTC", color: "var(--mmtc)", v: series((t) => t.latency_p99_ms.mmtc)}], B.mmtc),
+    chart("Link utilization, paths A / B / first C link", xs, [
+      {name: "l12 (A)", color: "var(--urllc)", v: series((t) => t.link_util.l12)}, {name: "l13 (B)", color: "var(--embb)", v: series((t) => t.link_util.l13)},
+      {name: "l14 (C)", color: "var(--mmtc)", v: series((t) => t.link_util.l14)}], META.max_reserved_fraction),
+  ].join("");
+}
+function chart(title, xs, ser, thr) {
+  const W = 300, H = 120, P = {l: 34, r: 6, t: 6, b: 18};
+  const vals = ser.flatMap((s) => s.v).filter((v) => v !== null);
+  let ymax = Math.max(thr ?? 0, ...(vals.length ? vals : [1])) * 1.1 || 1;
+  const n = Math.max(RUN.slots, 2);
+  const X = (t) => P.l + (W - P.l - P.r) * t / (n);
+  const Y = (v) => P.t + (H - P.t - P.b) * (1 - Math.min(v, ymax) / ymax);
+  let g = `<line x1="${P.l}" y1="${H - P.b}" x2="${W - P.r}" y2="${H - P.b}" stroke="var(--line)"/>`;
+  for (const f of [0, .5, 1]) g += `<text x="${P.l - 4}" y="${Y(ymax * f) + 3}" font-size="9" text-anchor="end" style="fill:var(--muted)">${fmt(ymax * f, ymax < 3 ? 2 : 0)}</text>`;
+  g += `<text x="${W - P.r}" y="${H - 4}" font-size="9" text-anchor="end" style="fill:var(--muted)">t=${n}</text><text x="${P.l}" y="${H - 4}" font-size="9" style="fill:var(--muted)">t=0</text>`;
+  if (thr !== undefined) g += `<line x1="${P.l}" y1="${Y(thr)}" x2="${W - P.r}" y2="${Y(thr)}" stroke="var(--bad)" stroke-dasharray="4 3" stroke-width="1"/>`;
+  let missing = 0;
+  for (const s of ser) {
+    let d = "", pen = false;
+    s.v.forEach((v, i) => { if (v === null) { pen = false; missing++; return; } d += `${pen ? "L" : "M"}${X(xs[i]).toFixed(1)},${Y(v).toFixed(1)}`; pen = true; });
+    g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.6" ${s.dash ? 'stroke-dasharray="3 3"' : ""}/>`;
+    s.v.forEach((v, i) => { if (v === null) g += `<line x1="${X(xs[i])}" y1="${P.t}" x2="${X(xs[i])}" y2="${H - P.b}" stroke="var(--unk)" stroke-opacity=".5"/>`; });
+  }
+  const leg = ser.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("") + (thr !== undefined ? '<span><i style="background:var(--bad)"></i>limit</span>' : "")
+    + (missing ? `<span style="color:var(--unk)">▮ ${missing} unavailable value(s) (gap, not zero)</span>` : "");
+  return `<div class="chart"><div class="t">${esc(title)}</div><svg viewBox="0 0 ${W} ${H}" width="100%">${g}</svg><div class="legend">${leg}</div></div>`;
+}
+
+// ------------------------------------------------------------------ observation, timeline
+function renderObservation(step) {
+  const o = step.observation, req = new Set([...o.required_state, ...o.required_demand]);
+  const cell = (m) => m.status !== "ok" ? `<span class="tag unk">${esc(m.status)}${isNum(m.age_s) && m.status !== "missing" ? ` (${fmt(m.age_s, 1)} s old)` : ""}</span>` + (m.value !== null ? ` ${fmt(m.value, 3)}` : "")
+    : (m.value === null ? NA : fmt(m.value, 3));
+  const fam = (prefix, src) => Object.entries(src).filter(([k]) => k.startsWith(prefix));
+  const groups = [["latency_p99_ms.", o.state, "latency (ms)"], ["throughput_mbps.", o.state, "throughput (Mb/s)"], ["loss_rate.", o.state, "loss"],
+                  ["offered_load_mbps.", o.demand, "offered (Mb/s)"], ["link_utilization.", o.state, "link util"], ["background_load_mbps.", o.state, "background (Mb/s)"]];
+  const rows = groups.map(([p, src, name]) => `<tr><td style="color:var(--muted);white-space:nowrap">${name}</td><td>${fam(p, src).map(([k, m]) =>
+    `<span style="white-space:nowrap;margin-right:10px">${esc(k.slice(p.length))}${req.has(k) ? "" : "<sup title='not required by the shield'>·</sup>"}: ${cell(m)}</span>`).join(" ")}</td></tr>`).join("");
+  const bad = Object.entries({...o.state, ...o.demand}).filter(([, m]) => m.status !== "ok");
+  $("observation").innerHTML = `<table class="obs"><tbody>${rows}</tbody></table>
+    <p class="note">${bad.length ? `<b style="color:var(--unk)">${bad.length} metric(s) unusable</b> (${esc(bad.map(([k, m]) => k + ": " + m.status).slice(0, 8).join(", "))}${bad.length > 8 ? " …" : ""}). The shield treats unusable required metrics as UNKNOWN and does not certify.`
+      : "All metrics present and fresh."} Values are what the controller saw at t=${step.t}${RUN.backend === "sim" ? " (simulated telemetry with noise)" : ""}.</p>`;
+}
+function renderTimeline() {
+  const items = [];
+  for (let i = RUN.steps.length - 1; i >= 0 && items.length < 400; i--) {
+    const s = RUN.steps[i];
+    for (const e of s.events.slice().reverse()) items.push(`<div class="ev ${e.kind}"><span class="tt">t=${s.t}</span><span class="x">${esc(e.text)}</span></div>`);
+  }
+  $("timeline").innerHTML = items.join("") || '<p class="note">No events yet.</p>';
+}
+
+// ------------------------------------------------------------------ summary
+async function renderSummary() {
+  const S = await api("/api/summary?run_id=" + RUN.run_id), r = S.runner, d = S.demo;
+  const L = labels(), B = META.latency_bounds_ms;
+  const lat = Object.entries(d.latency).map(([s, x]) => `${s.toUpperCase()}: worst ${fmt(x.max_valid, 3) ?? "unavailable"} ms (bound ${x.bound_ms}), ${r["latency_violation_slots." + s]} slot(s) above · ${x.valid_slots}/${x.slots} slots with a value`).join("<br>");
+  const thr = Object.entries(d.throughput).map(([s, x]) => `${s.toUpperCase()}: ${x.mean_valid === null ? "unavailable" : fmt(x.mean_valid, 1) + " Mb/s mean"} over ${x.valid_slots}/${x.slots} slots` + (x.valid_slots < x.slots ? ` <span class="tag unk">${x.slots - x.valid_slots} slot(s) missing — excluded, not zero</span>` : "")).join("<br>");
+  const shielded = d.controller === "shielded";
+  const meaning = [];
+  if (shielded) meaning.push(`The shield certified the applied action in ${d.certified_steps} of ${r.slots} slots and fell back to π₀(s) in ${r.fallback_slots}${d.fallback_uncertified_steps ? `, of which <b>${d.fallback_uncertified_steps} uncertified</b> (applied without a certificate under Remark 1; not shown safe)` : ""}.`);
+  if (d.controller.startsWith("unshielded")) meaning.push(`This baseline applied unverified actions in every slot; the shadow shield would have rejected ${r.shadow_rejected_applied_slots} of them.`);
+  if (d.controller === "fallback-only") meaning.push(`π₀(s) was applied every slot; the shield could not certify it in ${d.fallback_uncertified_steps} slot(s).`);
+  meaning.push(`${r.any_violation_slots} slot(s) had an overload or latency-bound violation in the outcome (${L.src}).`);
+  const cannot = d.backend === "sim"
+    ? "This is one seed of a simulated network whose model deliberately differs from the shield's. It does not establish real-network safety, statistical significance, or that certified actions are safe (certificates hold only under the nominal model)."
+    : "These are emulated-network measurements on one machine, not real-network validation. Overload is unobservable here and several counter-derived metrics are provisional.";
+  $("summary").innerHTML = `<div class="kv">
+      <div>Scenario</div><div><b>${esc(d.scenario)}</b> — ${esc(d.description)}</div>
+      <div>Controller / seed / backend</div><div>${esc(d.controller)} / ${d.seed} / ${d.backend === "sim" ? "simulated network" : "Mininet (measured)"}</div>
+      <div>Steps</div><div>${r.slots}</div>
+      <div>Certified actions applied</div><div>${d.certified_steps}</div>
+      <div>Candidates rejected</div><div>${shielded ? `${d.rejected_candidates} of ${d.verified_candidates} verified (rate ${fmt(r.candidate_rejection_rate, 3)})` : "not applicable (no candidates verified)"}</div>
+      <div>Fallback activations</div><div>${r.fallback_slots} (${d.fallback_certified_steps} certified, <b style="color:${d.fallback_uncertified_steps ? "var(--bad)" : "inherit"}">${d.fallback_uncertified_steps} uncertified</b>)</div>
+      <div>Unverified actions applied</div><div>${d.unverified_steps}</div>
+      <div>Violation slots</div><div>${r.any_violation_slots} any · overload ${d.backend === "mininet" ? "not observable on Mininet" : r.overload_slots} · reservation limit ${r.reservation_violation_slots}</div>
+      <div>Latency (${esc(L.lat)})</div><div>${lat}</div>
+      <div>Throughput delivered</div><div>${thr}</div>
+      <div>Recovery after first disturbance</div><div>${r.disturbance_start === null ? "no disturbance in this scenario" : r.recovery_slots === null ? "did not recover (3 clean slots) before the end" : r.recovery_slots + " slot(s)"}</div>
+      <div>Verification time</div><div>mean ${fmt(r.verify_time_ms_mean, 1)} ms, p95 ${fmt(r.verify_time_ms_p95, 1)} ms per slot</div>
+    </div>
+    <h2 style="margin-top:12px">What this means</h2><p class="note" style="color:var(--ink)">${meaning.join(" ")}</p>
+    <h2>What cannot be concluded</h2><p class="note" style="color:var(--ink)">${cannot}</p>
+    <details><summary>Raw runner summary (vgcp.experiments.runner.summarize)</summary><pre style="white-space:pre-wrap;font-size:11.5px">${esc(JSON.stringify(r, null, 1))}</pre></details>`;
+  $("summaryPanel").classList.remove("hidden");
+}
+
+// ------------------------------------------------------------------ run control
+function syncButtons() {
+  const has = !!RUN, done = has && RUN.steps.length >= RUN.slots;
+  $("btnPlay").disabled = !has || done || busy && !playing; $("btnStep").disabled = !has || done || playing || busy; $("btnReset").disabled = !has;
+  $("btnPlay").textContent = playing ? "⏸ Pause" : "▶ Play";
+  if (has) setStatus(`Run <b>${esc(RUN.scenario)}</b> · controller <b>${esc(RUN.controller)}</b> · seed ${RUN.seed} · ${RUN.backend === "sim" ? "simulated network" : "<b>Mininet</b>"} · slot <b>${RUN.steps.length}</b> / ${RUN.slots}${done ? " · <b>finished</b>" : playing ? " · playing" : ""}`);
+}
+async function start() {
+  playing = false; busy = true; syncButtons();
+  try {
+    const sc = $("scenario").value;
+    setStatus("Starting run…" + ($("backend").value === "mininet" ? " (building the Mininet network)" : ""));
+    const r = await api("/api/run", {scenario: sc, controller: $("controller").value, seed: +$("seed").value || 0, backend: $("backend").value});
+    RUN = {...r, steps: []};
+    $("summaryPanel").classList.add("hidden"); $("timeline").innerHTML = '<p class="note">No events yet.</p>';
+    $("candidates").innerHTML = '<p class="note">No step yet.</p>'; $("decision").innerHTML = '<p class="note">Press Step or Play.</p>';
+    $("observation").innerHTML = '<p class="note">No observation yet.</p>'; $("cards").innerHTML = ""; $("charts").innerHTML = "";
+    $("slotNo").textContent = "–"; drawTopo(r.initial); renderStages(null, -1);
+  } catch (e) { setStatus(`<span class="err">${esc(e.message)}</span>`); RUN = null; }
+  busy = false; syncButtons();
+}
+async function stepOnce() {
+  if (!RUN || RUN.steps.length >= RUN.slots) return false;
+  busy = true; syncButtons();
+  try {
+    const s = await api("/api/step", {run_id: RUN.run_id});
+    if (s.done && !s.t && s.t !== 0) { busy = false; return false; }
+    RUN.steps.push(s);
+    $("slotNo").textContent = `t=${s.t}`;
+    drawTopo(s.result.truth); renderDecision(s); renderCandidates(s); renderMetrics(s); renderObservation(s); renderTimeline();
+    await animateStages(s);
+    if (s.done) { playing = false; await renderSummary(); }
+  } catch (e) { setStatus(`<span class="err">${esc(e.message)}</span>`); playing = false; busy = false; syncButtons(); return false; }
+  busy = false; syncButtons();
+  return RUN.steps.length < RUN.slots;
+}
+async function play() {
+  if (playing) { playing = false; syncButtons(); return; }
+  playing = true; syncButtons();
+  while (playing && await stepOnce()) await new Promise((r) => setTimeout(r, Math.max(0, +$("speed").value)));
+  playing = false; syncButtons();
+}
+$("btnStart").onclick = start; $("btnStep").onclick = stepOnce; $("btnPlay").onclick = play;
+$("btnReset").onclick = () => { playing = false; RUN = null; start(); };
+$("scenario").onchange = () => { const s = META.scenarios.find((x) => x.name === $("scenario").value); $("scenario").title = s?.description || ""; };
+
+// ------------------------------------------------------------------ saved campaigns
+async function loadHistory() {
+  if (!history.length) {
+    history = await api("/api/history");
+    $("histSel").innerHTML = history.map((h, i) => `<option value="${i}">${esc(h.id)} — ${esc(h.backend)} · commit ${esc(h.commit)}${h.dirty ? " (dirty)" : ""}</option>`).join("");
+    $("histSel").onchange = showHistory;
+    const want = new URLSearchParams(location.search).get("campaign");
+    const i = history.findIndex((h) => h.id === want);
+    if (i >= 0) $("histSel").value = String(i);
+  }
+  showHistory();
+}
+async function showHistory() {
+  const h = history[+$("histSel").value]; if (!h) { $("histBody").innerHTML = '<p class="note">No saved campaigns found.</p>'; return; }
+  const item = await api("/api/history/item?id=" + encodeURIComponent(h.id));
+  const mn = String(h.backend).startsWith("mininet");
+  const caveat = mn
+    ? `Mininet campaign (emulated network, measured values, not ground truth). Known measurement limitations (audit 2026-10-22): flow counters reset on reroute, so eMBB throughput is <b>unavailable</b> for any trial with a missing slot;
+       background under-measured when the ingress meter drops traffic; counter steps distort offered load and loss; latency is the <b>max of 8 probes (RTT/2)</b>, not a reliable p99; overload slots are <b>not meaningful</b> (post-shaping utilization cannot exceed capacity).`
+    : "Simulated-backend campaign (simulator ground truth). Not real-network measurements.";
+  const cols = [["any_violation_slots", "violation slots"], ["overload_slots", "overload slots"], ["reservation_violation_slots", "reservation-limit slots"],
+                ["fallback_slots", "fallback slots"], ["uncertified_fallback_slots", "uncertified fallback"], ["candidate_rejection_rate", "rejection rate"],
+                ["shadow_rejected_applied_slots", "applied, shadow-rejected"], ["max_link_util", "max link util"]];
+  let html = `<div class="banner"><b>HISTORICAL DATA</b> from <code>${esc(h.id)}</code> · ${esc(h.backend)} · commit ${esc(h.commit)}${h.dirty ? " (dirty)" : ""} · started ${esc(h.started_utc)} · seeds ${esc(JSON.stringify(h.seeds))} · fallback ${esc(h.fallback_policy)}. Not produced by the live run.<br>${caveat}</div>`;
+  for (const [sc, modes] of Object.entries(item.summary)) {
+    const ms = Object.keys(modes);
+    html += `<h2 style="margin-top:12px">${esc(sc)}</h2><div class="tablewrap"><table><thead><tr><th>metric (mean ± std over seeds)</th>${ms.map((m) => `<th>${esc(m)}</th>`).join("")}</tr></thead><tbody>`;
+    for (const [k, name] of cols) {
+      const na = mn && k === "overload_slots";
+      html += `<tr><td>${name}${na ? ' <span class="tag unk">not meaningful on Mininet</span>' : ""}</td>${ms.map((m) => { const v = modes[m][k];
+        const notApplicable = k === "candidate_rejection_rate" && m !== "shielded";  // only the shielded controller verifies candidates
+        return `<td class="num">${na ? "–" : notApplicable ? '<span class="tag">n/a</span>' : (v && isNum(v.mean)) ? `${fmt(v.mean, 3)} ± ${fmt(v.std, 2)}` : NA}</td>`; }).join("")}</tr>`;
+    }
+    html += `<tr><td>eMBB throughput Mb/s (mean)${mn ? ' <span class="tag warn">provisional</span>' : ""}</td>${ms.map((m) => { const v = modes[m].mean_throughput_mbps?.embb; return `<td class="num">${isNum(v) ? fmt(v, 1) : NA}</td>`; }).join("")}</tr>`;
+    html += `<tr><td>recovered trials</td>${ms.map((m) => `<td>${modes[m].recovered_trials}/${modes[m].trials}</td>`).join("")}</tr></tbody></table></div>`;
+  }
+  $("histBody").innerHTML = html;
+}
+
+// ------------------------------------------------------------------ boot
+(async () => {
+  try {
+    META = await api("/api/meta");
+    layout(); drawTopo(null); renderStages(null, -1);
+    $("scenario").innerHTML = META.scenarios.map((s) => `<option value="${esc(s.name)}" title="${esc(s.description)}">${esc(s.name)} (${s.slots} slots)</option>`).join("");
+    $("scenario").value = "s3_background_on_urllc_path"; $("scenario").onchange();
+    $("controller").innerHTML = META.controllers.map((c) => `<option>${esc(c)}</option>`).join("");
+    $("backend").innerHTML = Object.entries(META.backends).map(([k, b]) => `<option value="${k}" ${b.available ? "" : "disabled"} title="${esc(b.reason)}">${k === "sim" ? "simulated" : "Mininet"}${b.available ? "" : " (unavailable)"}</option>`).join("");
+    const mn = META.backends.mininet;
+    setStatus(`Ready. Pick a scenario and controller, then <b>Start new run</b>. Fallback policy: ${esc(META.fallback_policy)}. Mininet: ${mn.available ? "available" : "unavailable — " + esc(mn.reason)}`);
+    // deep link: ?scenario=...&controller=...&seed=...&steps=N  starts a run and steps N slots
+    const q = new URLSearchParams(location.search);
+    if (q.has("scenario")) {
+      $("scenario").value = q.get("scenario"); $("controller").value = q.get("controller") || "shielded"; $("seed").value = q.get("seed") || "1";
+      await start();
+      const n = Math.min(+q.get("steps") || 0, RUN ? RUN.slots : 0);
+      for (let i = 0; i < n; i++) if (!(await stepOnce())) break;
+      if (q.get("tab") === "history") $("tabHist").onclick();
+    } else if (q.get("tab") === "history") $("tabHist").onclick();
+  } catch (e) { setStatus(`<span class="err">Cannot reach the dashboard server: ${esc(e.message)}</span>`); }
+})();
+</script>
+</body>
+</html>

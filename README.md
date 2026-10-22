@@ -27,9 +27,10 @@ production-readiness or real-network safety claims.
 research/   the paper (specification; kept locally, not tracked)
 docs/       design notes and research-to-code traceability
 configs/    network, constraints, intents (STL), shield settings - all thresholds live here
-src/vgcp/   package: state, action, constraints, stl/, models/, shield, config
+src/vgcp/   package: state, action, constraints, stl/, models/, shield, config,
+            loop/, sim/, emu/ (Mininet), experiments/, demo/ (dashboard)
 tests/unit/ unit tests (no Mininet, no root)
-scripts/    environment setup and test runners
+scripts/    environment setup, test runners, run_dashboard.sh
 experiments/ (Milestone 5)
 ```
 
@@ -70,6 +71,46 @@ scripts/run_experiments.sh --scenarios experiments/scenarios/s*.yaml --seeds 1-5
 
 Read first: [docs/milestone1_design.md](docs/milestone1_design.md) and
 [docs/traceability.md](docs/traceability.md).
+
+## Control-loop dashboard
+
+A browser dashboard that runs the real controller, shield and simulated network one
+control slot at a time (`src/vgcp/demo/`, Python standard library only, no root).
+
+```bash
+scripts/run_dashboard.sh
+```
+
+Then open <http://127.0.0.1:8765/> (from Windows with WSL2, the same URL works).
+Use `--port N` for another port; stop the server with Ctrl+C.
+
+**Controls.** Pick a scenario, controller and seed, then *Start new run*. *Step*
+runs one slot; *Play* / *Pause* runs at the chosen speed (ms per slot); *Reset*
+restarts the same configuration. Click a candidate row to see its certificate
+checks. *Saved campaigns* shows earlier campaign summaries, labelled as historical.
+A link such as `/?scenario=s3_background_on_urllc_path&controller=shielded&steps=25`
+starts a run and steps it automatically.
+
+**What it shows.** Topology from `configs/network.yaml` with each slice's installed
+path. The seven loop stages per slot. Every candidate with its verification result
+and failed check, and the decision: CERTIFIED ACTION, CERTIFIED FALLBACK,
+**UNCERTIFIED FALLBACK**, UNVERIFIED (baseline) or NOT APPLIED. Outcome metrics,
+the observation the controller actually used, an event timeline and an end-of-run
+summary computed by the experiment runner's own `summarize()`. A dashboard run
+produces the same records as `run_trial` with the same settings (tested).
+
+**Limitations.**
+* Live runs use the simulated network. Its outcome values are the simulator's
+  ground truth, not real-network measurements.
+* The Mininet backend is offered only when the server runs as root. The dashboard
+  never calls `sudo`; use `sudo scripts/mininet_run.sh` for Mininet runs.
+* Mininet campaign data in *Saved campaigns* is provisional (see
+  docs/EXPERIMENTS.md):
+  * overload is not observable;
+  * latency is the max of 8 probes;
+  * counter-derived throughput, loss and background have known errors.
+* Missing values are shown as unavailable and never as zero.
+* Nothing shown establishes real-network safety.
 
 ## Known limitations and open audit findings
 
