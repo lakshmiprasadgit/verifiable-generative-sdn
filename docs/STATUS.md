@@ -1,6 +1,6 @@
 # Implementation status
 
-As of 2026-10-21. A research prototype: not formally verified, and nothing here is a
+As of 2026-10-22. A research prototype: not formally verified, and nothing here is a
 claim about the safety of a real network.
 
 ## Where we are
@@ -9,16 +9,18 @@ claim about the safety of a real network.
 *simulated* network. The Mininet / Open vSwitch backend is implemented and
 unit-tested without root. Its first privileged run failed all 7 integration tests;
 after the fixes (below, commit `692ba3b`) the **9 integration tests passed on real
-Mininet in two consecutive passes** (2026-10-21 17:22 UTC). The Mininet experiment
-campaign **has not run**, so there are no Mininet controller results yet.
+Mininet in two consecutive passes** (2026-10-21 17:22 UTC). The first Mininet
+campaign ran on 2026-10-22 (36 trials, complete), but an audit found measurement
+errors in its telemetry, so its results are **provisional** and not yet reported
+(below). A dashboard now shows the loop live on the simulated network.
 
 | Milestone | Scope | Status |
 |---|---|---|
 | 1 | state/action schemas, constraints, STL robustness, verification shield | done; all audit findings addressed |
-| 2 | closed loop, network backends, telemetry, experiments | **in progress**: loop, simulated backend, experiments done; Mininet backend: integration suite green twice; campaign not yet run |
-| 3 | traffic, telemetry calibration of the nominal model | not started |
-| 4 | Eq 42 selection, utility, closed-loop evaluation at scale | not started |
-| 5 | experiment campaign and reports | started early (simulation) |
+| 2 | closed loop, network backends, telemetry, experiments | **mostly done**: loop, simulated backend, experiments, Mininet backend (integration green twice), first Mininet campaign (provisional). Open: telemetry fixes, re-run, write-up, review and merge |
+| 3 | traffic, telemetry calibration of the nominal model | not started; telemetry problems identified by the 2026-10-22 audit |
+| 4 | fallback, candidates, Eq 42 selection, closed loop | partly done early: π₀(s), heuristic candidates and the enforced closed loop exist; Eq 42 selection not started |
+| 5 | experiment campaign and reports | started: simulation campaigns reported; one provisional Mininet campaign; dashboard |
 
 ## Done in Milestone 2 (2026-10-21)
 
@@ -71,6 +73,40 @@ are gone as well (checked afterwards with `pgrep`). This shows the emulation doe
 and constraints assume, within the tests' loose tolerances; it says nothing about the
 controller's performance or the safety of a real network.
 
+## Mininet campaign (2026-10-22, `experiments/results/mininet-20261022T110546Z/`) - provisional
+
+s1-s3 × 4 controllers × 3 seeds at commit `b78e247`, clean tree: all 36 trials
+complete (60 step records and a summary each), no probe lost. A read-only audit
+traced the anomalies to the emulation's telemetry, not to the controller:
+
+* **Reroutes reset flow counters.** Rules are deleted and re-added, so the next
+  delta is NaN (65 missing values, all in s2, all at reroute slots) or silently
+  wrong. This turned eMBB mean throughput into `null` and fed missing data to the
+  controllers.
+* **Background under-measured** by about 22 Mbit/s when the ingress meter drops
+  traffic: the ingress rule counts packets before the meter. Budgets certified on
+  that basis overfilled path B, which is why all controllers show s2
+  reservation-limit slots.
+* **Flow counters update in steps** (offered load reads 0.5× then 1.5×); this
+  makes most of the per-slot loss values artifacts.
+* **The meter passes about 1.10× its budget** at 50-70 Mbit/s (cause unknown).
+* **Units differ:** scenario rates are payloads, while counters count frames.
+* **s3:** 20 uncertified fallbacks per shielded seed. The nominal model predicts
+  URLLC about 1.16 ms (bound 1 ms) where about 0.45 ms was measured. Measured URLLC
+  exceeded 1 ms in 2 of those 60 fallback slots.
+* **Metric limits:** latency is the max of 8 pings; `overload_slots` cannot detect
+  overload on Mininet (post-shaping utilization).
+
+These numbers are not to be quoted as results until the telemetry is fixed and s2
+re-run.
+
+## Dashboard (2026-10-22)
+
+`scripts/run_dashboard.sh` (no root) steps the real loop on the simulated network
+and shows candidates, certificates, fallbacks (including UNCERTIFIED FALLBACK),
+outcomes, the observation used, a timeline and a summary. Saved campaigns are
+labelled as historical. Its records equal `run_trial`'s (tested in `test_demo`).
+
 ## Headline results (simulation, 5 seeds)
 
 * With the static π₀, a background surge made π₀ infeasible and the shield could
@@ -83,7 +119,7 @@ controller's performance or the safety of a real network.
 
 ## Tests
 
-`scripts/run_unit_tests.sh` - **460 passed, 0 failed** (no root, no Mininet).
+`scripts/run_unit_tests.sh` - **467 passed, 0 failed** (no root, no Mininet; includes test_demo 7).
 New in Milestone 2: test_loop 15, test_sim 16, test_experiments 10,
 test_fallback_policy 8, test_emu 32 (13 of them regressions for the first Mininet
 run). Integration tests (`tests/integration`, 9) are skipped without root; on real
@@ -92,17 +128,16 @@ is kept.
 
 ## Next engineering objective
 
-Run the s1-s3 campaign on the emulated network, as root (about 40 minutes; it
-first repeats the integration suite twice and runs the campaign only if both passes
-are green):
+Fix the Mininet telemetry found by the 2026-10-22 audit:
+1. make the fake fabric strict (counter resets, pre-meter ingress counters);
+2. fix reroute counter handling and meter-aware background;
+3. use NaN-aware metrics with valid-slot counts.
 
-```bash
-sudo scripts/mininet_run.sh --campaign
-```
-
-Then compare the measured results with the simulation and record them in
-EXPERIMENTS.md, and decide on merging `feat/m2-mininet-backend` into `main` (not merged
-yet; the branch is pushed).
+Then run the integration suite twice and re-run s2 on Mininet (12 trials, about
+14 minutes) before s1-s3. Decisions needed from the team: rate units (payload or
+frames, eMBB packet size), probes per slot, and an overload definition on Mininet.
+After that, record the results in EXPERIMENTS.md, then review
+`feat/m2-mininet-backend` and decide on merging it into `main` (not merged).
 
 ## Known limitations
 

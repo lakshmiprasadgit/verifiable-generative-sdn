@@ -3,8 +3,8 @@
 All results below come from the **simulated backend** (`vgcp.sim`), a ground-truth
 model that deliberately differs from the shield's nominal model. They are not
 measurements of a real network and do not establish real-network safety. The
-Mininet backend is implemented; **no Mininet results exist yet** (see "Emulated
-network runs" below).
+Mininet integration tests pass, and one Mininet campaign has run, but its results
+are **provisional** because of telemetry errors (see "Emulated network runs" below).
 
 ## Research questions
 
@@ -174,7 +174,7 @@ the shielded controller with the static π₀, for the ablation.
 * The selection rule is "first certified", not the paper's Eq 42.
 * Thresholds and scales are illustrative, not 6G requirements.
 
-## Emulated network runs (Mininet) - integration green, campaign not run
+## Emulated network runs (Mininet) - integration green, first campaign provisional
 
 `sudo scripts/mininet_run.sh` runs the root-only integration tests twice (connectivity,
 routes, meter placement and policing, background accounting, probe latency, reroute
@@ -204,6 +204,20 @@ shielded closed-loop smoke test (8 slots). After the last pass, 0 switch interfa
 and 0 harness iperf3 processes remained. Campaign not requested; **no campaign
 results exist**. The tests' tolerances are loose (e.g. ±20 % on policing, ±15 % on
 background), so this validates the plumbing, not measurement precision.
+
+**Campaign 1, 2026-10-22 11:08 UTC (`mininet-20261022T110546Z/campaign`), commit
+`b78e247`, clean tree:** s1-s3 × 4 controllers × 3 seeds, all 36 trials complete. Its
+summary is **not reported as a result**. A read-only audit found telemetry errors:
+* reroute counter resets (NaN or wrong deltas; eMBB throughput `null` in s2);
+* background under-measured behind the ingress meter (about 101 vs about 124 Mbit/s
+  on l13, which explains the s2 reservation-limit slots for every controller);
+* stepwise flow-counter updates (most per-slot loss values are artifacts);
+* the meter passing about 1.10× its budget;
+* payload versus frame units.
+
+Latency is the maximum of 8 pings and `overload_slots` cannot see overload here.
+Details and slot IDs: docs/STATUS.md. The dashboard's *Saved campaigns* tab shows it
+with these caveats.
 
 Differences from the simulator, by design of the emulation:
 * values are **measurements**, not ground truth (counters, ping probes);
