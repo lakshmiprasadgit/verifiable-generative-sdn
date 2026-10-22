@@ -24,10 +24,10 @@ and automation. Both share the status table and the quick start.
 | Milestone | Content | Status |
 |---|---|---|
 | 1 | state/action schemas, hard constraints, STL robustness, verification shield | **done** - all audit findings addressed; certificates are enforced by `CertifiedApplier` |
-| 2 | closed loop, simulated and Mininet backends, experiments | **done in code** - loop, simulator, Mininet backend (integration 9/9 twice), telemetry fixes from the Mininet audit. **Open:** re-run on Mininet (root) |
+| 2 | closed loop, simulated and Mininet backends, experiments | **done** - loop, simulator, Mininet backend (integration 10/10 twice); telemetry fixes validated on Mininet (s2, 2026-10-22). **Open:** the meter's ~1.10× overshoot (team decision) |
 | 3 | traffic, telemetry, nominal-model calibration | **done (method and simulator evidence)** - calibration tool with held-out evaluation. **Open:** fit on fixed Mininet data; the configured factor is unchanged until then |
 | 4 | fallback, heuristic candidates, selection, closed loop | **done** - π₀(s), heuristic candidates, enforced loop, Eq 42 utility selection (`shielded-utility`). **Open:** recursive feasibility (Assumption 3) is not shown |
-| 5 | experiments, metrics, reports | **done for simulation** - 2026-10-22 campaigns (5 controllers, main and held-out seeds, calibration ablation) in `experiments/reports/`; dashboard. **Open:** Mininet campaign after the fixes |
+| 5 | experiments, metrics, reports | **done for simulation, s2 on Mininet** - 2026-10-22 campaigns (5 controllers, main and held-out seeds, calibration ablation; Mininet s2 after the fixes) in `experiments/reports/`; dashboard. **Open:** full s1-s3 Mininet campaign |
 
 Details and evidence: [docs/STATUS.md](docs/STATUS.md). Work happens on the branch
 `feat/m2-mininet-backend`, which is not yet merged into `main`.
@@ -280,8 +280,9 @@ Read this section completely before changing anything.
     reroute counter resets (rule identity by age), pre-meter ingress counting
     (managed rate read downstream), NaN handling in loss and summaries, overload
     on measured data.
-  * **Fixed in code, not yet run on Mininet:** stale rule counters. OVS refreshes
-    them every 500 ms; snapshots now call `ovs-appctl revalidator/wait` first.
+  * **Fixed and confirmed on Mininet** (`dde4fe4`, `mininet-20261022T174731Z`):
+    stale rule counters. OVS refreshes them every 500 ms; snapshots now call
+    `ovs-appctl revalidator/wait` first.
   * **Still open:**
     * the meter passes ~1.10× the budget at 50-70 Mb/s (cause unknown), which
       alone explains s2's reservation-limit slots on Mininet (team decision,

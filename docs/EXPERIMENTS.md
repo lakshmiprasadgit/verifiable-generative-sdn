@@ -318,6 +318,40 @@ with these caveats.
 These are emulated measurements; the violation counts (0.33-1.33 per trial) are
 too few to rank controllers.
 
+**Campaign 3, 2026-10-22 17:47 UTC (`mininet-20261022T174731Z`), commit `dde4fe4`
+(current rule counters), clean tree.**
+* Integration suite 10/10 twice, including the new steady-counter test.
+* s2 × 5 controllers × seeds 1-3, all 15 trials complete.
+* Summary: `experiments/reports/2026-10-22-mininet-s2-counter-refresh/`.
+
+**What changed:**
+* eMBB offered-load misreadings 47 → 0;
+* spurious eMBB reroutes 6 → 0;
+* uncertified fallbacks 3 → 0;
+* missing values stay 0;
+* l13 background median 123.5 Mbit/s (expected 123.6).
+
+| s2, mean over 3 seeds | shielded | shielded-utility | unshielded | unshielded-fitted | fallback-only |
+|---|---|---|---|---|---|
+| violation slots | 0 | 1.0 | 2.3 | 0.33 | 0.33 |
+| applied, shield would reject | 0 | 0 | 20 | 0 | 0 |
+| reservation-limit slots | 19 | 19 | 18.3 | 19 | 19.3 |
+| reserved Mbit/s (mean) | 127 | 96.8 | 158 | 96.9 | 95.9 |
+| eMBB delivered Mbit/s (frames) | 77.0 | 77.0 | 82.4 | 77.1 | 77.0 |
+
+**Reading:**
+* The shielded modes' remaining violations are isolated one-slot URLLC spikes on an
+  idle path A, consistent with ping noise (max of 8 probes).
+* The unshielded controller, as in simulation, applied 20 actions per trial that the
+  shield would have rejected, and drove path B to 0.87-0.98 utilization (eMBB up to
+  50 ms).
+* Eq 42 again reserved about 24 % less bandwidth than first-certified at equal
+  outcomes.
+* Reservation-limit slots remain for every controller because of the meter's ~1.10×
+  overshoot (decision pending).
+* Overload is not observable here. Three seeds per controller are too few to rank
+  the controllers that rarely violate.
+
 Differences from the simulator, by design of the emulation:
 * values are **measurements**, not ground truth (counters, ping probes);
 * offered load is constant within a demand window (no per-slot demand noise);

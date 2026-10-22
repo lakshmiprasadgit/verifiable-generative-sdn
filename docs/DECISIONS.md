@@ -367,8 +367,9 @@ the configured traffic. It also isolated two remaining causes.
      reads the counters. Failure raises instead of reading stale counters.
    * *Rejected:* lowering max-revalidator, which is a system configuration change
      that OVS discourages.
-   * *Not yet run on Mininet.* A new integration test checks steady traffic reads
-     steady.
+   * *Validated on Mininet* (`mininet-20261022T174731Z`, commit `dde4fe4`): the new
+     steady-counter integration test passed twice; offered-load misreadings went
+     47 → 0, spurious reroutes 6 → 0 and uncertified fallbacks 3 → 0 in s2.
 2. **The meter delivers about 1.10× its budget** at 50-70 Mbit/s (1.00× at
    1 Mbit/s). The cause is unknown. Every certified budget that fills a link to the
    0.9 reservation limit therefore exceeds it, which explains all of s2's

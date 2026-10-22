@@ -5,24 +5,24 @@ claim about the safety of a real network.
 
 ## Where we are
 
-**Every Stage 1 milestone has its implementation in place; what remains is
-validation on the emulated network and team decisions.**
+**Every Stage 1 milestone has its implementation in place, and the emulated
+network's telemetry is validated (s2, 2026-10-22). What remains is team decisions
+(meter, probes, units) and the full Mininet campaign.**
 
 * **Simulation:** the closed loop runs end to end, with first-certified and Eq 42
   selection, a calibration tool, and campaigns on main and held-out seeds.
 * **Mininet:** the backend passed its 9 integration tests twice (2026-10-21). Its
   first campaign (2026-10-22) exposed telemetry errors, which are fixed in code
   (`824c8b1`).
-* **Not yet re-run on Mininet**, which needs root: the integration suite and the
-  s2 campaign. Until then, the Mininet results stay provisional.
+* **Mininet re-runs** at `074e46f` and `dde4fe4` validated the fixes (below).
 
 | Milestone | Scope | Status |
 |---|---|---|
 | 1 | state/action schemas, constraints, STL robustness, verification shield | **done**; all audit findings addressed |
-| 2 | closed loop, network backends, telemetry, experiments | **done in code**: telemetry and metric fixes from the Mininet audit (`824c8b1`). **Open:** re-run the integration suite and s2 on Mininet (root) |
+| 2 | closed loop, network backends, telemetry, experiments | **done**: telemetry and metric fixes validated on Mininet (integration 10/10 twice, s2 re-runs 2026-10-22). **Open:** the meter's ~1.10× overshoot (team decision) |
 | 3 | traffic, telemetry, nominal-model calibration | **done (method and simulator evidence)**: calibration tool, held-out evaluation, provisional Mininet fit. The configured factor is deliberately unchanged. **Open:** fit and adopt on fixed Mininet data |
 | 4 | fallback, candidates, selection, closed loop | **done**: π₀(s), heuristic candidates, enforced closed loop, Eq 42 utility selection (`shielded-utility`, D20). **Open:** Assumption 3 (recursive feasibility) is still not shown |
-| 5 | experiments, metrics, reports | **done for simulation**: 2026-10-22 campaigns (main, held-out, calibration ablation) in `experiments/reports/`; dashboard. **Open:** a Mininet campaign after the fixes |
+| 5 | experiments, metrics, reports | **done for simulation and Mininet s2**: 2026-10-22 campaigns in `experiments/reports/`; dashboard. **Open:** full s1-s3 Mininet campaign |
 
 ## Done in Milestone 2 (2026-10-21)
 
@@ -102,6 +102,23 @@ traced the anomalies to the emulation's telemetry, not to the controller:
 These numbers are not to be quoted as results until the telemetry is fixed and s2
 re-run.
 
+## Mininet validation complete for the telemetry (2026-10-22 17:47, `mininet-20261022T174731Z`)
+
+At `dde4fe4`: integration suite **10/10 twice**; s2 × 5 controllers × 3 seeds, all
+trials complete.
+
+**Confirmed:**
+* all audit telemetry problems are gone: 0 missing values, 0 offered-load
+  misreadings, 0 spurious reroutes, background within 0.1 %;
+* 0 uncertified fallbacks;
+* shielded: 0 violation slots; shielded-utility: 1 per trial, isolated URLLC ping
+  spikes on an idle path;
+* unshielded: 20 actions per trial the shield would have rejected, and path B
+  driven to 0.87-0.98.
+
+**Still open:** the meter's ~1.10× overshoot, which causes every controller's
+reservation-limit slots (team decision). Details: EXPERIMENTS.md, "Campaign 3".
+
 ## Mininet re-run after the fixes (2026-10-22 17:09, `mininet-20261022T170942Z`)
 
 At `074e46f`: integration suite 9/9 twice; s2 × 5 controllers × 3 seeds, all trials
@@ -167,25 +184,17 @@ is kept.
 
 ## Next engineering objective
 
-Validate the counter-refresh fix on Mininet, as root: the integration suite twice
-(now 10 tests, including steady counters), then s2 with all five controllers
-(about 17 minutes in total):
-
-```bash
-sudo scripts/mininet_run.sh --campaign --only s2_background_on_embb_path
-```
-
-Then:
-1. Compare with `mininet-20261022T170942Z`. Expected: no 0.5×/1.5× offered-load
-   readings, no spurious background jumps, and so no π₀ reroutes during the surge.
-   The reservation-limit slots will remain until the meter decision.
-2. Run s1-s3 (`--campaign` alone, about 52 minutes).
-3. Fit the latency factor on Mininet seeds and check it on held-out Mininet seeds.
-
-Team decisions still needed:
-* rate units (payload or frames) and eMBB's packet size (1500 bytes fragments);
-* probes per slot (latency is the max of 8);
-* the meter's ~1.10× pass-through.
+The telemetry is validated on Mininet. Next:
+1. **Meter overshoot** (team decision, DECISIONS 2026-10-22). Recommended: a short
+   root diagnostic sweeping fixed meter rates to find the cause, then model the
+   overshoot in the constraint and T̂ (option b) rather than hiding it.
+2. **Probes per slot:** latency is the max of 8 pings, and isolated spikes now
+   dominate the shielded modes' violations. Decide a probe count (e.g. 50) or a
+   statistic.
+3. **Full Mininet campaign** (s1-s3, about 52 minutes):
+   `sudo scripts/mininet_run.sh --campaign`. Then fit the latency factor on Mininet
+   seeds and check it on held-out seeds.
+4. **Rate units** (payload or frames) and eMBB's packet size, which fragments.
 
 ## Known limitations
 
