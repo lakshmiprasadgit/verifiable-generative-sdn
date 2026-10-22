@@ -105,6 +105,7 @@ class FlowCounters:
     n_packets: int
     n_bytes: int
     out_port: int | None
+    duration_s: float | None = None  # age of the rule; a reinstalled rule starts again at 0
 
 
 def _int_or_none(s: str) -> int | None:
@@ -156,6 +157,7 @@ def parse_dump_flows(text: str) -> list[FlowCounters]:
             n_packets=int(fields.get("n_packets", "0")),
             n_bytes=int(fields.get("n_bytes", "0")),
             out_port=int(out.group(1)) if out else None,
+            duration_s=float(fields["duration"].rstrip("s")) if "duration" in fields else None,
         ))
     return flows
 

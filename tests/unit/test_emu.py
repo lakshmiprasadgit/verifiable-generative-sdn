@@ -141,13 +141,61 @@ def test_parse_ping():
 def test_background_is_link_rate_minus_managed_flow_rate(cfg, plan):
     l = plan.links["l13"]
     ck = {"embb": 0x200}
-    flow = lambda b: FlowCounters(0x200, 100, f"ip,nw_src={plan.senders['embb'].ip},nw_dst={plan.receivers['embb'].ip}", 0, b, l.port_a)
-    before = Snapshot(0.0, {"s1": {l.port_a: PortCounters(0, 0, 0, 0, 0)}}, {"s1": [flow(0)]})
-    # 1 s: port sent 150 Mbit, the eMBB rule 80 Mbit -> 70 Mbit/s of background
-    after = Snapshot(1.0, {"s1": {l.port_a: PortCounters(0, 0, 0, int(150e6 / 8), 0)}}, {"s1": [flow(int(80e6 / 8))]})
+    match = f"ip,nw_src={plan.senders['embb'].ip},nw_dst={plan.receivers['embb'].ip}"
+    flow = lambda b, age: FlowCounters(0x200, 100, match, 0, b, l.port_a, age)
+    before = Snapshot(0.0, {"s1": {l.port_a: PortCounters(0, 0, 0, 0, 0)}}, {"s1": [flow(0, 5.0)], "s3": [flow(0, 5.0)]})
+    # 1 s: port sent 150 Mbit. eMBB offered 100 Mbit at the ingress rule (before its
+    # meter); 80 Mbit crossed l13 (counted on s3) -> 70 Mbit/s of background, not 50.
+    after = Snapshot(1.0, {"s1": {l.port_a: PortCounters(0, 0, 0, int(150e6 / 8), 0)}},
+                     {"s1": [flow(int(100e6 / 8), 6.0)], "s3": [flow(int(80e6 / 8), 6.0)]})
     m = link_measurements(plan, before, after, ck)
     assert m["background_load_mbps.l13"] == pytest.approx(70.0)
     assert m["link_utilization.l13"] == pytest.approx(150 / 200)
+
+
+def test_reinstalled_rule_is_not_compared_with_its_predecessor(cfg, plan):
+    """Reroute: the s5 rule is deleted and re-added; its new counter must not be
+    subtracted from the old rule's counter (gave NaN or silently wrong rates)."""
+    from vgcp.emu.telemetry import flow_rate_mbps
+    old = FlowCounters(0x200, 100, "m", 0, int(10e6 / 8), 1, 1.0)
+    same = FlowCounters(0x200, 100, "m", 0, int(30e6 / 8), 1, 2.0)
+    assert flow_rate_mbps(same, old, 1.0) == pytest.approx(20.0)  # same rule, aged by 1 s
+    new = FlowCounters(0x200, 100, "m", 0, int(10e6 / 8 + 1000), 1, 0.95)  # reinstalled 0.95 s ago
+    assert flow_rate_mbps(new, old, 1.0) == pytest.approx((10e6 / 8 + 1000) * 8 / 0.95 / 1e6)  # own lifetime, not ~0
+    young = FlowCounters(0x200, 100, "m", 0, 100, 1, 0.1)
+    assert math.isnan(flow_rate_mbps(young, old, 1.0))  # too young to measure: unknown, not 0
+    assert math.isnan(flow_rate_mbps(None, old, 1.0))
+    no_age = FlowCounters(0x200, 100, "m", 0, 5, 1)
+    assert math.isnan(flow_rate_mbps(no_age, FlowCounters(0x200, 100, "m", 0, 50, 1), 1.0))  # reset, no age known
+
+
+def test_reroute_keeps_measurements_after_counter_reset(cfg):
+    net, fabric, _ = _net(cfg)
+    net.apply(action_with(cfg, path={"mmtc": "A"}))
+    net.advance()
+    st = net.observe().state
+    assert st.value("throughput_mbps.mmtc") == pytest.approx(2.0)  # was 0.0 before the fix
+    assert net.observe().demand.value("offered_load_mbps.mmtc") == pytest.approx(2.0)
+
+
+def test_metered_slice_does_not_hide_background(cfg):
+    """Budget below demand: the ingress rule counts 80, only 60 crosses l13."""
+    net, _, _ = _net(cfg, background=[{"start": 0, "end": 10, "links": ["l13", "l35"], "mbps": 50.0}])
+    net.apply(action_with(cfg, rate_budget_mbps={"embb": 60.0}))
+    net.advance()
+    net.advance()
+    st = net.observe().state
+    assert st.value("background_load_mbps.l13") == pytest.approx(50.0)  # pre-fix: 30
+    assert st.value("throughput_mbps.embb") == pytest.approx(60.0)
+
+
+def test_unknown_admitted_rate_gives_unknown_loss(cfg, plan):
+    src, dst = plan.senders["embb"].ip, plan.receivers["embb"].ip
+    f = lambda b: FlowCounters(0x200, 100, f"ip,nw_src={src},nw_dst={dst}", 0, b, 1)
+    before = Snapshot(0.0, {}, {"s1": [f(0)], "s5": [f(0)]})  # no rule on s3: admitted unknown
+    after = Snapshot(1.0, {}, {"s1": [f(100)], "s3": [f(100)], "s5": [f(100)]})
+    m = slice_measurements(plan, before, after, {"embb": 0x200}, {"embb": ("s1", "s3", "s5")})
+    assert math.isnan(m["loss_rate.embb"])  # pre-fix: 0.0
 
 
 def test_counter_reset_is_unknown_not_zero(cfg, plan):

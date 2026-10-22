@@ -4,6 +4,10 @@ It enforces Open vSwitch's meter rules, so ordering bugs fail here and not first
 a real switch: a flow referencing a meter that does not exist on that switch is
 rejected (OFPMMFC_INVALID_METER), as are adding an existing meter and modifying a
 missing one.
+
+Its counters behave like OVS's (first Mininet campaign, 2026-10-22): a deleted and
+re-added rule starts again at 0 bytes with a new age (duration), and a slice's
+ingress rule counts packets before the meter drops them.
 """
 
 from __future__ import annotations
@@ -38,6 +42,7 @@ class FakeFabric:
         self.rates: dict[str, tuple[float, int]] = {}
         self.calls: list[tuple] = []
         self._flow_bytes: dict[tuple[str, int, str], float] = {}
+        self._installed: dict[tuple[str, int, str], float] = {}  # rule -> install time (for duration)
         self._tx: dict[tuple[str, int], float] = {}
         self._last = 0.0
         self._probe: list[str] = []
@@ -59,10 +64,17 @@ class FakeFabric:
             if m and int(m.group(1)) not in self.meters.get(switch, {}):
                 raise FabricError(f"ovs-ofctl add-flows {switch}: OFPMMFC_INVALID_METER ({r.text()})")
         self.rules[switch] += rules
+        for r in rules:  # a new rule's counters start at zero
+            self._flow_bytes[(switch, r.cookie, r.match)] = 0.0
+            self._installed[(switch, r.cookie, r.match)] = self.clock()
         self.calls.append(("add_flows", switch, len(rules)))
 
     def del_flows(self, switch, cookie, mask):
+        gone = [r for r in self.rules[switch] if (r.cookie & mask) == (cookie & mask)]
         self.rules[switch] = [r for r in self.rules[switch] if (r.cookie & mask) != (cookie & mask)]
+        for r in gone:
+            self._flow_bytes.pop((switch, r.cookie, r.match), None)
+            self._installed.pop((switch, r.cookie, r.match), None)
         self.calls.append(("del_flows", switch, cookie))
 
     def set_meter(self, switch, spec, new):
@@ -121,7 +133,8 @@ class FakeFabric:
             for i, (sw, rule, out) in enumerate(hops):
                 rate = offered if i == 0 else admitted
                 key = (sw, rule.cookie, rule.match)
-                self._flow_bytes[key] = self._flow_bytes.get(key, 0.0) + rate * 1e6 / 8 * dt
+                lived = min(dt, self.clock() - self._installed.get(key, -1e9))  # rule may be younger than dt
+                self._flow_bytes[key] = self._flow_bytes.get(key, 0.0) + rate * 1e6 / 8 * lived
                 self._tx[(sw, out)] = self._tx.get((sw, out), 0.0) + admitted * 1e6 / 8 * dt
         ports = {sw: {} for sw in self.plan.switches}
         for (sw, port), b in self._tx.items():
@@ -129,7 +142,9 @@ class FakeFabric:
         for l in self.plan.links.values():
             ports[l.a].setdefault(l.port_a, PortCounters(0, 0, 0, 0, 0))
         flows = {sw: [FlowCounters(r.cookie, r.priority, r.match, 0, int(self._flow_bytes.get((sw, r.cookie, r.match), 0)),
-                                   int(re.search(r"output:(\d+)", r.actions).group(1))) for r in self.rules[sw]]
+                                   int(re.search(r"output:(\d+)", r.actions).group(1)),
+                                   self.clock() - self._installed.get((sw, r.cookie, r.match), 0.0))
+                      for r in self.rules[sw]]
                  for sw in self.plan.switches}
         rtts = {}
         for s in self._probe:

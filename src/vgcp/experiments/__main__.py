@@ -131,7 +131,8 @@ COLUMNS = [
 
 def render_markdown(table: dict, manifest: dict) -> str:
     kind = ("Simulated backend (ground truth)" if manifest["backend"] == "simulated"
-            else "Emulated Mininet backend (measured values, not ground truth)")
+            else "Emulated Mininet backend (measured values, not ground truth; overload is not observable, "
+                 "latency is the max of the slot's probes)")
     lines = [f"{kind}. Commit `{manifest['git_commit'][:7]}`"
              f"{' (dirty)' if manifest['git_dirty'] else ''}, seeds {manifest['seeds']}. "
              "Values are mean ± std over seeds.", ""]
@@ -143,7 +144,10 @@ def render_markdown(table: dict, manifest: dict) -> str:
                 v = m.get(key)
                 cells.append("–" if not isinstance(v, dict) else f"{v['mean']:.3g} ± {v['std']:.2g}")
             lines.append(f"| {label} | " + " | ".join(cells) + " |")
-        lines.append("| eMBB throughput Mbit/s | " + " | ".join(f"{m['mean_throughput_mbps']['embb']:.3g}" for m in modes.values()) + " |")
+        lines.append("| eMBB throughput Mbit/s | " + " | ".join(
+            "unavailable" if m["mean_throughput_mbps"]["embb"] is None
+            else f"{m['mean_throughput_mbps']['embb']:.3g} ({m['mean_throughput_mbps_trials']['embb']}/{m['trials']} trials)"
+            for m in modes.values()) + " |")
         lines.append("| recovered trials | " + " | ".join(f"{m['recovered_trials']}/{m['trials']}" for m in modes.values()) + " |")
         lines.append("")
     return "\n".join(lines)

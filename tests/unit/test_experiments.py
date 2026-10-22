@@ -76,3 +76,29 @@ def test_repository_scenarios_load(cfg):
     for f in files:
         sc = load_scenario(f, {s.name for s in cfg.slices}, set(cfg.topology.links))
         assert sc.name == f.stem
+
+
+def test_missing_values_are_excluded_not_zeroed(cfg):
+    """Mininet audit 2026-10-22: one NaN slot turned a trial's mean throughput into null."""
+    import math
+    sc = scenario(cfg, slots=4)
+    rows = run_trial(cfg, sc, "fallback-only", 1, 0)
+    rows[1]["truth_next"]["throughput_mbps"]["embb"] = math.nan
+    rows[2]["truth_next"]["loss"]["embb"] = None
+    s = summarize(cfg, sc, rows)
+    ok = [r["truth_next"]["throughput_mbps"]["embb"] for i, r in enumerate(rows) if i != 1]
+    assert s["mean_throughput_mbps"]["embb"] == pytest.approx(sum(ok) / 3)
+    assert s["valid_slots"]["throughput_mbps"]["embb"] == 3 and s["valid_slots"]["loss"]["embb"] == 3
+    agg = aggregate([s, summarize(cfg, sc, run_trial(cfg, sc, "fallback-only", 2, 0))])
+    assert agg["mean_throughput_mbps"]["embb"] is not None and agg["mean_throughput_mbps_trials"]["embb"] == 2
+
+
+def test_overload_is_not_observable_on_measured_data(cfg):
+    sc = scenario(cfg, slots=3)
+    rows = run_trial(cfg, sc, "fallback-only", 1, 0)
+    for r in rows:
+        r["truth_next"]["source"] = "measured"
+        r["truth_next"]["link_util"]["l13"] = 1.5  # impossible post-shaping; must not count as overload
+    s = summarize(cfg, sc, rows)
+    assert s["overload_slots"] is None and s["overload_observable"] is False
+    assert s["reservation_violation_slots"] == 3

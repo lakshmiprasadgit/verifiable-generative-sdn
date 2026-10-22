@@ -228,3 +228,45 @@ the campaign only on request.
 untested: an iperf3 client restart racing its server (it would now fail loudly). The
 leftover removal assumes only one emulation runs at a time on the host, which is
 already required because the interface names are fixed.
+
+---
+
+## 2026-10-22 · Telemetry and metric fixes after the first Mininet campaign
+
+**Problem.** The audit of `mininet-20261022T110546Z` found that the measurements, not
+the controller, explained most anomalies:
+1. A reroute deletes and re-adds rules, and the next delta compared two different
+   rules' counters: NaN, or a plausible wrong value. Example: throughput 0.0 instead
+   of 2.0, reproduced by the stricter fake fabric.
+2. Background = link rate − managed rate, with the managed rate counted on the
+   upstream switch. At the ingress that is before the meter, so background was
+   under-measured by the metered-away amount (about 22 Mbit/s in s2).
+3. One NaN slot made a trial's mean `null`.
+4. Loss turned NaN into 0 when the admitted rate was unknown.
+5. Measured overload was reported as 0 although it cannot be observed after
+   shaping.
+6. The candidate generator read unknown demand and unknown background as 0.
+
+**Chosen.**
+1. Rule identity by age: OVS's per-rule `duration` must grow by the interval,
+   otherwise the rule was reinstalled and its rate is its bytes over its own age
+   (≥ 0.25 s), else unknown.
+2. The managed rate on a→b is counted by the same rule on b, i.e. what arrived
+   over the link.
+3. Means skip missing slots and report `valid_slots`; aggregates report how many
+   trials contributed.
+4. Loss is NaN when an input is.
+5. `overload_slots` is `None` with `overload_observable: false` on measured data.
+6. Unknown demand keeps π₀'s budget; a link with unknown background has no room.
+
+The fake fabric now resets counters on reinstall and reports rule ages.
+
+**Not changed (team decisions pending).**
+* Probes per slot: latency is still the max of 8.
+* Rate units: scenarios give payload rates while counters count frames.
+* eMBB's 1500-byte payload fragments.
+* The meter passes about 1.10× its budget (cause unknown).
+* Stepwise flow-counter updates (seen as 0.5×/1.5× readings).
+
+**Uncertainty.** Verified with unit tests against the stricter fake fabric only. The
+privileged integration suite and an s2 re-run on Mininet are still needed.

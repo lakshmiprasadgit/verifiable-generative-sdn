@@ -10,6 +10,7 @@ shielded and unshielded controllers face realistic, sometimes unsafe proposals.
 
 from __future__ import annotations
 
+import math
 import random
 
 from vgcp.action import ControlAction
@@ -40,8 +41,7 @@ class HeuristicCandidateGenerator:
         return float(min(max(v, lo), hi))
 
     def _offered(self, obs: Observation, s: str) -> float:
-        v = obs.demand.value(f"offered_load_mbps.{s}")
-        return 0.0 if v != v else v  # NaN (unmeasured) -> 0; the shield will reject on missing data
+        return obs.demand.value(f"offered_load_mbps.{s}")  # NaN if unmeasured
 
     def _make(self, path, budget) -> ControlAction:
         fb = self.fallback
@@ -53,7 +53,13 @@ class HeuristicCandidateGenerator:
         )
 
     def _demand_matched(self, obs: Observation) -> dict[str, float]:
-        return {s: self._offered(obs, s) * self.headroom for s in self.slices}
+        # Unmeasured demand keeps pi_0's budget. (It used to count as 0, which shrank
+        # budgets to the minimum whenever a counter was unavailable; Mininet audit.)
+        out = {}
+        for s in self.slices:
+            v = self._offered(obs, s)
+            out[s] = self.fallback.rate_budget_mbps[s] if v != v else v * self.headroom
+        return out
 
     # ---------------------------------------------------------------- heuristics
     def propose(self, obs: Observation) -> list[Candidate]:
@@ -70,23 +76,23 @@ class HeuristicCandidateGenerator:
         # its budget to fit - a conventional congestion response.
         frac = self.cfg.constraints.max_reserved_fraction
         others = {s: matched[s] for s in self.slices if s != "embb"}
-        fit_path, fit_room = None, -float("inf")
+        fit_path, fit_room = self.fallback.path["embb"], -float("inf")
         for pid in self.slices["embb"].allowed_paths:
             room = min(
                 frac * topo.links[lid].capacity_mbps
-                - _nz(obs.state.value(f"background_load_mbps.{lid}"))
+                - _unknown_full(obs.state.value(f"background_load_mbps.{lid}"))
                 - sum(b for s, b in others.items() if lid in topo.paths[self.fallback.path[s]].links)
                 for lid in topo.paths[pid].links
             )
             if room > fit_room:
                 fit_path, fit_room = pid, room
         out.append(Candidate("capacity-fitted", self._make(
-            {"embb": fit_path}, {**matched, "embb": min(matched["embb"], fit_room)})))
+            {"embb": fit_path}, {**matched, "embb": min(matched["embb"], fit_room)})))  # -inf room clips to the minimum
         # Background-aware: move eMBB to the allowed path with the most measured headroom.
-        best_path, best_room = None, -1.0
+        best_path, best_room = self.fallback.path["embb"], -float("inf")
         for pid in self.slices["embb"].allowed_paths:
             room = min(
-                topo.links[lid].capacity_mbps - _nz(obs.state.value(f"background_load_mbps.{lid}"))
+                topo.links[lid].capacity_mbps - _unknown_full(obs.state.value(f"background_load_mbps.{lid}"))
                 for lid in topo.paths[pid].links
             )
             if room > best_room:
@@ -106,5 +112,6 @@ class HeuristicCandidateGenerator:
         return out
 
 
-def _nz(v: float) -> float:
-    return 0.0 if v != v else v
+def _unknown_full(v: float) -> float:
+    """Background load for a room computation: unknown counts as no room, never as idle."""
+    return math.inf if v != v else v

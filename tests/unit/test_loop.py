@@ -166,3 +166,15 @@ def test_fitted_first_preference(cfg):
     assert [c.label for c in gen.propose(_obs(cfg))][:2] == ["capacity-fitted", "greedy-embb"]
     with pytest.raises(ValueError):
         HeuristicCandidateGenerator(cfg, preference="best")
+
+
+def test_missing_measurements_are_not_read_as_zero_by_the_generator(cfg):
+    """Unknown demand keeps pi_0's budget; unknown background is never 'free room'."""
+    obs = _obs(cfg, **{"background_load_mbps.l13": None})
+    dm = obs.demand.metrics
+    obs = Observation(obs.t, obs.state, type(obs.demand)(obs.demand.t, {**dm, "offered_load_mbps.embb": Measurement(None, NOW)}),
+                      obs.now_s)
+    cands = {c.label: c.action for c in HeuristicCandidateGenerator(cfg, n_random=0).propose(obs)}
+    assert cands["demand-matched"].rate_budget_mbps["embb"] == cfg.fallback_action.rate_budget_mbps["embb"]  # not the minimum
+    assert cands["capacity-fitted"].path["embb"] != "B" and cands["least-loaded-embb"].path["embb"] != "B"
+    assert all(cfg.action_schema.is_valid(a) for a in cands.values())

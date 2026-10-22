@@ -4,8 +4,11 @@ Definitions (one control slot between snapshots, dt seconds):
 
   link rate l = (a -> b)   delta tx_bytes of switch a's port toward b
                            (links carry forward traffic in config order a -> b)
-  managed rate on l        delta n_bytes of the slices' forward rules on switch a that
-                           output to that port
+  managed rate on l        the slices whose forward rule on a outputs to that port,
+                           counted by the same rule on switch b, i.e. what arrived
+                           over l. (Counting on a was wrong at the ingress: a slice's
+                           ingress rule counts packets before its meter drops them,
+                           which under-measured background; Mininet audit 2026-10-22.)
   background load on l     link rate - managed rate      (audit H1; counters see
                            delivered, post-drop traffic, so overload under-measures it)
   offered load of a slice  delta bytes of its forward rule on the ingress switch
@@ -14,7 +17,14 @@ Definitions (one control slot between snapshots, dt seconds):
                            the meter: meter drops are budget enforcement, not loss)
   delivered (throughput)   delta bytes of its forward rule on the egress switch
   loss                     1 - delivered / admitted
-  p99 latency              RTT p99 of the slot's ping probes / 2 (symmetric links)
+  p99 latency              RTT p99 of the slot's ping probes / 2 (symmetric links);
+                           with 8 probes this is their maximum, not a reliable p99
+
+Rule counters across a reinstall (reroutes delete and re-add rules): a rule is the
+same rule as in the previous snapshot only if its age (OVS "duration") grew by the
+interval. Otherwise its counter restarted, and its rate is its bytes over its own
+age when that covers most of the slot, else unknown. Comparing counters of two
+different rules gave NaN or silently wrong values (Mininet audit 2026-10-22).
 """
 
 from __future__ import annotations
@@ -39,11 +49,36 @@ def _mbps(delta_bytes: float, dt: float) -> float:
     return delta_bytes * 8 / dt / 1e6
 
 
-def _flow_bytes(flows: list[FlowCounters], cookie: int, src_ip: str, dst_ip: str) -> int | None:
+REINSTALL_TOLERANCE_S = 0.25  # slack when comparing rule ages with the snapshot interval
+MIN_RULE_AGE_S = 0.25  # a reinstalled rule younger than this gives no usable rate
+
+
+def _find(flows: list[FlowCounters], cookie: int, match: str) -> FlowCounters | None:
+    return next((f for f in flows if f.cookie == cookie and f.match == match), None)
+
+
+def _flow(flows: list[FlowCounters], cookie: int, src_ip: str, dst_ip: str) -> FlowCounters | None:
     for f in flows:
         if f.cookie == cookie and f"nw_src={src_ip}" in f.match and f"nw_dst={dst_ip}" in f.match:
-            return f.n_bytes
+            return f
     return None
+
+
+def flow_rate_mbps(new: FlowCounters | None, old: FlowCounters | None, dt: float) -> float:
+    """Rate of one rule over the interval; NaN (unknown) when it cannot be measured."""
+    if new is None:
+        return math.nan
+    same_rule = old is not None and new.n_bytes >= old.n_bytes and (
+        new.duration_s is None or old.duration_s is None
+        or new.duration_s >= old.duration_s + dt - REINSTALL_TOLERANCE_S)
+    if same_rule:
+        return _mbps(float(new.n_bytes - old.n_bytes), dt)
+    # The counter restarted (rule reinstalled, or reset): use the rule's own life, if it
+    # spans most of this interval and nothing older.
+    age = new.duration_s
+    if age is not None and MIN_RULE_AGE_S <= age <= dt + REINSTALL_TOLERANCE_S:
+        return _mbps(float(new.n_bytes), age)
+    return math.nan
 
 
 def _delta(new: int | None, old: int | None) -> float:
@@ -64,8 +99,9 @@ def link_measurements(plan: EmulationPlan, before: Snapshot, after: Snapshot,
         managed = 0.0
         for f1 in after.flows.get(link.a, []):
             if f1.cookie in managed_cookies and f1.out_port == link.port_a:
-                f0 = next((f for f in before.flows.get(link.a, []) if f.cookie == f1.cookie and f.match == f1.match), None)
-                managed += _mbps(_delta(f1.n_bytes, f0.n_bytes if f0 else 0), dt)
+                # what crossed l is counted on b (after the ingress meter and l's queue)
+                managed += flow_rate_mbps(_find(after.flows.get(link.b, []), f1.cookie, f1.match),
+                                          _find(before.flows.get(link.b, []), f1.cookie, f1.match), dt)
         out[f"link_utilization.{lid}"] = rate / link.capacity_mbps
         out[f"background_load_mbps.{lid}"] = max(0.0, rate - managed) if not math.isnan(rate + managed) else math.nan
     return out
@@ -80,13 +116,16 @@ def slice_measurements(plan: EmulationPlan, before: Snapshot, after: Snapshot, s
         src, dst, ck = plan.senders[s].ip, plan.receivers[s].ip, slice_cookies[s]
 
         def rate(sw: str) -> float:
-            return _mbps(_delta(_flow_bytes(after.flows.get(sw, []), ck, src, dst),
-                                _flow_bytes(before.flows.get(sw, []), ck, src, dst)), dt)
+            return flow_rate_mbps(_flow(after.flows.get(sw, []), ck, src, dst),
+                                  _flow(before.flows.get(sw, []), ck, src, dst), dt)
 
         offered, admitted, delivered = rate(nodes[0]), rate(nodes[1]), rate(nodes[-1])
         out[f"offered_load_mbps.{s}"] = offered
         out[f"throughput_mbps.{s}"] = delivered
-        out[f"loss_rate.{s}"] = min(1.0, max(0.0, 1.0 - delivered / admitted)) if admitted > 0 else 0.0
+        if math.isnan(admitted) or math.isnan(delivered):
+            out[f"loss_rate.{s}"] = math.nan  # unknown, never 0
+        else:
+            out[f"loss_rate.{s}"] = min(1.0, max(0.0, 1.0 - delivered / admitted)) if admitted > 0 else 0.0
         rtts = after.rtts_ms.get(s, [])
         if rtts:
             ordered = sorted(rtts)
