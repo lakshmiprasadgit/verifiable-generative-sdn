@@ -59,14 +59,24 @@ def main(argv: list[str] | None = None) -> int:
                     help="sim: simulated ground truth (no root); mininet: emulated network (needs root)")
     ap.add_argument("--fallback-policy", choices=("static", "capacity_aware"),
                     help="override shield.fallback_policy from the configuration")
+    ap.add_argument("--latency-safety-factor", type=float,
+                    help="override shield.nominal_model.latency_safety_factor (calibration ablation)")
     ap.add_argument("--out", default=str(ROOT / "experiments" / "results" / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")))
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
+    overrides = {}
     if args.fallback_policy:
+        overrides["fallback_policy"] = args.fallback_policy
+    if args.latency_safety_factor is not None:
+        overrides["latency_safety_factor"] = args.latency_safety_factor
+    if overrides:
         raw = copy.deepcopy(dict(cfg.raw))
-        raw["shield"]["fallback_policy"] = args.fallback_policy
-        cfg = build_config(raw, source=f"{args.config} (fallback_policy={args.fallback_policy})")
+        if "fallback_policy" in overrides:
+            raw["shield"]["fallback_policy"] = overrides["fallback_policy"]
+        if "latency_safety_factor" in overrides:
+            raw["shield"]["nominal_model"]["latency_safety_factor"] = overrides["latency_safety_factor"]
+        cfg = build_config(raw, source=f"{args.config} (overrides {overrides})")
     slices = {s.name for s in cfg.slices}
     scenarios = [load_scenario(p, slices, set(cfg.topology.links)) for p in args.scenarios]
     seeds = _seeds(args.seeds)
@@ -91,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
         "backend": "simulated" if args.backend == "sim" else "mininet (measured)",
         "config_hash": cfg.config_hash,
         "fallback_policy": cfg.shield.fallback_policy,
+        "latency_safety_factor": cfg.nominal_model.latency_safety_factor,
+        "config_overrides": overrides,
         "scenarios": {s.name: {"file": str(p), "digest": s.digest} for s, p in zip(scenarios, args.scenarios)},
         "modes": args.modes, "seeds": seeds, "n_random": args.n_random,
     }
