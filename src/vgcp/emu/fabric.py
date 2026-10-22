@@ -124,7 +124,7 @@ class MininetFabric:
     def __init__(self) -> None:
         if os.geteuid() != 0:
             raise FabricError("the Mininet backend needs root: run it with sudo (see scripts/mininet_run.sh)")
-        for tool in ("ovs-ofctl", "ovs-vsctl", "iperf3", "ping"):
+        for tool in ("ovs-ofctl", "ovs-vsctl", "ovs-appctl", "iperf3", "ping"):
             if shutil.which(tool) is None:
                 raise FabricError(f"{tool} not found")
         self.net = None
@@ -255,10 +255,27 @@ class MininetFabric:
         if dead:  # otherwise the slot would be measured with less traffic than was set
             raise FabricError(f"traffic generator (iperf3 client) exited for {dead}")
         rtts = self._collect_probes()
-        t = time.monotonic()
+        self._refresh_flow_stats()
+        t = time.monotonic()  # the counters read below are current as of now
         ports = {sw: parse_dump_ports(self._ofctl("dump-ports", sw)) for sw in self.plan.switches}
         flows = {sw: parse_dump_flows(self._ofctl("dump-flows", sw)) for sw in self.plan.switches}
         return Snapshot(t, ports, flows, rtts)
+
+    def _refresh_flow_stats(self) -> None:
+        """Make the OpenFlow rule counters current before reading them.
+
+        OVS copies rule counters from the kernel datapath in revalidation cycles,
+        every max-revalidator ms (default 500, see ovs-vswitchd.conf.db(5)). A plain
+        dump can therefore be up to half a slot old, and per-slot rates read about
+        0.5x or 1.5x their value (Mininet campaigns 2026-10-22: offered load 42 / 126
+        instead of 84 Mbit/s, and spurious background jumps that triggered reroutes).
+        `ovs-appctl revalidator/wait` returns after a full cycle has completed. It is
+        read-only and changes no configuration. Port counters are read directly from
+        the network device and need no refresh.
+        """
+        r = subprocess.run(["ovs-appctl", "revalidator/wait"], capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            raise FabricError(f"ovs-appctl revalidator/wait failed: {r.stderr.strip() or r.returncode}")
 
     def close(self) -> None:
         """Release everything, also after a partial setup. Idempotent; every step runs even

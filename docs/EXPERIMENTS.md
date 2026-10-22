@@ -286,6 +286,38 @@ Latency is the maximum of 8 pings and `overload_slots` cannot see overload here.
 Details and slot IDs: docs/STATUS.md. The dashboard's *Saved campaigns* tab shows it
 with these caveats.
 
+**Campaign 2, 2026-10-22 17:09 UTC (`mininet-20261022T170942Z`), commit `074e46f`
+(telemetry fixes), clean tree.**
+* Integration suite 9/9 twice, no leftovers.
+* s2 × 5 controllers × seeds 1-3, all 15 trials complete.
+* Summary: `experiments/reports/2026-10-22-mininet-s2-after-fixes/`.
+
+**What it validated:**
+* **No missing values** (provisional campaign: 65). Measured background on l13
+  during the surge has median 123.5 Mbit/s against 123.6 expected (before: 102).
+  The reinstall-safe rates and the post-meter background work on the real switch.
+* **Fewer shielded fallbacks:** uncertified fallbacks fell to 0.67 / 0.33 per trial
+  for shielded / shielded-utility (before: 2 per trial). Mean eMBB throughput is
+  available for every trial (75.7-82.0 Mbit/s).
+
+**What it showed is still wrong:**
+* **Reservation-limit slots stay at 18-20 for every controller.** Cause: the
+  capacity-fitted budgets fill l13 to exactly 0.900, but the OVS meter delivers a
+  median 1.10× its budget (191 metered slots, range 1.08-1.20). The link therefore
+  runs at 0.928. Background accounting is no longer involved.
+* **Stale rule counters.** OVS copies rule counters from the datapath every
+  max-revalidator = 500 ms, so a dump can be half a slot old. Offered load read
+  about 0.5×/1.5× in 47 slots, and background jumped (151.7 Mbit/s at t=37 in
+  shielded seed 1 while the link rate was unchanged). Acting on such readings,
+  π₀(s) moved eMBB onto path C (mMTC 32.7 ms) and then path A (URLLC 27.6 ms).
+  These are the shielded runs' violations. Fixed afterwards: snapshots call
+  `ovs-appctl revalidator/wait` first. That is not yet run on Mininet.
+* **Unshielded:** 22.7 applied actions per trial were ones the shield would have
+  rejected; 1.33 violation slots.
+
+These are emulated measurements; the violation counts (0.33-1.33 per trial) are
+too few to rank controllers.
+
 Differences from the simulator, by design of the emulation:
 * values are **measurements**, not ground truth (counters, ping probes);
 * offered load is constant within a demand window (no per-slot demand noise);

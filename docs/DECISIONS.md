@@ -349,3 +349,34 @@ background has no room, so it is never chosen as "least loaded" or "fitted".
 the 2026-10-22 simulation campaign, s4's `unshielded-fitted` eMBB throughput fell
 from 93.3 to 86.7 Mbit/s with no violation either way. The shielded controllers
 were unaffected, because they reject missing data anyway.
+
+---
+
+## 2026-10-22 · Read current rule counters (revalidator/wait); the meter's overshoot is the next decision
+
+**Evidence.** The Mininet re-run after the telemetry fixes (`mininet-20261022T170942Z`)
+confirmed those fixes: no missing values, and background measured within 0.1 % of
+the configured traffic. It also isolated two remaining causes.
+
+1. **Stale rule counters.** OVS copies OpenFlow rule counters from the datapath
+   once per revalidation cycle (`other_config:max-revalidator`, default 500 ms,
+   ovs-vswitchd.conf.db(5)). Per-slot rates therefore read about 0.5× or 1.5×, and
+   π₀(s) rerouted on spurious background readings.
+   * *Chosen:* `MininetFabric.snapshot` runs `ovs-appctl revalidator/wait`, a
+     read-only command that returns after a full cycle, and then timestamps and
+     reads the counters. Failure raises instead of reading stale counters.
+   * *Rejected:* lowering max-revalidator, which is a system configuration change
+     that OVS discourages.
+   * *Not yet run on Mininet.* A new integration test checks steady traffic reads
+     steady.
+2. **The meter delivers about 1.10× its budget** at 50-70 Mbit/s (1.00× at
+   1 Mbit/s). The cause is unknown. Every certified budget that fills a link to the
+   0.9 reservation limit therefore exceeds it, which explains all of s2's
+   reservation-limit slots. *Team decision needed:*
+   * (a) program meters at budget / 1.10, an empirical actuation correction;
+   * (b) model it: count budget × (1 + ε_meter) in the capacity constraint and T̂,
+     calibrated like the latency factor;
+   * (c) find the cause first, with a fixed-rate meter sweep (root, about 5 min).
+
+   Until then the reservation-limit metric on Mininet reflects this actuation
+   error.

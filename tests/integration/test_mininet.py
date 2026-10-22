@@ -34,7 +34,7 @@ def _why_not() -> str | None:
         return "Mininet not importable"
     if not Path("/var/run/openvswitch/db.sock").exists():
         return "Open vSwitch is not running"
-    for tool in ("ovs-ofctl", "iperf3", "ping"):
+    for tool in ("ovs-ofctl", "ovs-appctl", "iperf3", "ping"):
         if shutil.which(tool) is None:
             return f"{tool} not found"
     return None
@@ -180,3 +180,16 @@ def test_failed_setup_leaves_nothing_behind(make_net, cfg, plan):
     assert leftover_resources(plan) == []
     obs = _settle(make_net(), 1)  # the same names can be built again straight away
     assert obs.state.value("throughput_mbps.embb") > 0
+
+
+def test_rule_counters_are_current_every_slot(make_net, cfg):
+    """Constant traffic must read as a constant rate. Before refreshing the counters
+    (revalidator/wait), per-slot rates jumped to about 0.5x and 1.5x their value."""
+    net = make_net()
+    _settle(net, 1)
+    rates = []
+    for _ in range(8):
+        net.advance()
+        rates.append(net.observe().demand.value("offered_load_mbps.embb"))
+    assert all(r == r for r in rates), rates  # no unknown slots without reroutes
+    assert max(rates) / min(rates) < 1.2, rates

@@ -158,8 +158,10 @@ Eq 42: the certified candidate with the highest predicted utility), `unshielded`
   * latency is the maximum of only 8 pings;
   * overload cannot be observed after shaping.
 
-  The first two and the metric handling are fixed in code but not yet re-run on
-  Mininet. Do not quote that campaign's numbers.
+  The first two and the metric handling were fixed and confirmed by a Mininet
+  re-run of s2. That re-run isolated two remaining causes: stale counters (fixed in
+  code since) and the meter overshoot (open). Do not quote either campaign's
+  violation counts as results.
 * **Nothing here** establishes real-network safety.
 
 ### Where to read more
@@ -263,7 +265,7 @@ Read this section completely before changing anything.
 
 ### How to validate a change
 
-* Any code change: `scripts/run_unit_tests.sh` (~25 s; currently 493 passed).
+* Any code change: `scripts/run_unit_tests.sh` (~25 s; currently 494 passed).
 * `vgcp/emu/` changes: the unit tests, then hand the maintainer
   `sudo scripts/mininet_run.sh` (integration suite twice). Never run it yourself.
 * Dashboard changes: `.venv/bin/python -m pytest tests/unit/test_demo.py`, then start
@@ -274,12 +276,19 @@ Read this section completely before changing anything.
 ### Known open issues (do not "fix" by relabelling)
 
 * **Mininet telemetry** (2026-10-22 audit):
-  * Fixed in code (`824c8b1`), **not yet validated on Mininet**: reroute counter
-    resets (rule identity by age), pre-meter ingress counting (managed rate read
-    downstream), NaN handling in loss and summaries, overload on measured data.
-  * Still open: flow counters update in steps; the meter passes ~1.10× the budget at
-    50-70 Mb/s (cause unknown); scenarios give payload rates while counters count
-    frames; eMBB's 1500-byte payload fragments; latency is the max of 8 probes.
+  * **Fixed and confirmed on Mininet** (`824c8b1`, re-run `mininet-20261022T170942Z`):
+    reroute counter resets (rule identity by age), pre-meter ingress counting
+    (managed rate read downstream), NaN handling in loss and summaries, overload
+    on measured data.
+  * **Fixed in code, not yet run on Mininet:** stale rule counters. OVS refreshes
+    them every 500 ms; snapshots now call `ovs-appctl revalidator/wait` first.
+  * **Still open:**
+    * the meter passes ~1.10× the budget at 50-70 Mb/s (cause unknown), which
+      alone explains s2's reservation-limit slots on Mininet (team decision,
+      DECISIONS 2026-10-22);
+    * scenarios give payload rates while counters count frames;
+    * eMBB's 1500-byte payload fragments;
+    * latency is the max of 8 probes.
 * **Research gaps:**
   * The latency factor is calibrated on the simulator only; the configured 1.5 is
     kept.

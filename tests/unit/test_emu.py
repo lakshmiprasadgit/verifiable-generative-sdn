@@ -496,3 +496,25 @@ def test_meter_parsers_read_what_ovs_prints():
 
     assert parse_meter_features(show(reply(11, struct.pack("!IIIBB2x", 64, 2, 0xF, 1, 0)))) == 64
     assert parse_dump_meters(show(reply(10, meter(1, 100000) + meter(2, 5000)))) == {1: 100000, 2: 5000}
+
+
+
+def test_snapshot_refreshes_rule_counters_before_reading_them(bare_fabric, monkeypatch):
+    """Rule counters lag up to max-revalidator (500 ms) behind the datapath; a plain
+    dump read rates at 0.5x / 1.5x (Mininet campaigns 2026-10-22)."""
+    f, _, _ = bare_fabric
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd[:2] if cmd[0] == "ovs-appctl" else cmd[-2])
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(fabric_mod.subprocess, "run", run)
+    f.snapshot()
+    assert calls[0] == ["ovs-appctl", "revalidator/wait"]
+    assert set(calls[1:]) == {"dump-ports", "dump-flows"}
+
+    def failing(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 2, "", "unknown command")
+    monkeypatch.setattr(fabric_mod.subprocess, "run", failing)
+    with pytest.raises(FabricError, match="revalidator/wait"):
+        f.snapshot()  # stale counters are not silently accepted

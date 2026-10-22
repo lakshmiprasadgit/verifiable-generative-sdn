@@ -102,6 +102,27 @@ traced the anomalies to the emulation's telemetry, not to the controller:
 These numbers are not to be quoted as results until the telemetry is fixed and s2
 re-run.
 
+## Mininet re-run after the fixes (2026-10-22 17:09, `mininet-20261022T170942Z`)
+
+At `074e46f`: integration suite 9/9 twice; s2 × 5 controllers × 3 seeds, all trials
+complete.
+
+**Confirmed on the emulated network:**
+* no missing measurements (before: 65);
+* background on l13 measured at 123.5 Mbit/s against 123.6 expected (before: 102);
+* fewer uncertified fallbacks.
+
+**Two remaining causes found:**
+1. **Stale rule counters** (OVS refreshes them every 500 ms). Spurious readings
+   triggered π₀(s) reroutes and the shielded runs' few violations. Fixed in code
+   since (snapshots call `ovs-appctl revalidator/wait`, read-only), but **not yet
+   run on Mininet**.
+2. **The meter passes about 1.10× its budget,** which alone explains the 18-20
+   reservation-limit slots per trial for every controller. Needs a team decision
+   (DECISIONS, 2026-10-22).
+
+Details: EXPERIMENTS.md, "Campaign 2".
+
 ## Done on 2026-10-22 (after the Mininet audit)
 
 | Commit | What |
@@ -137,7 +158,7 @@ labelled as historical. Its records equal `run_trial`'s (tested in `test_demo`).
 
 ## Tests
 
-`scripts/run_unit_tests.sh` - **493 passed, 0 failed** (no root, no Mininet; includes test_demo, test_selection, test_calibration).
+`scripts/run_unit_tests.sh` - **494 passed, 0 failed** (no root, no Mininet; includes test_demo, test_selection, test_calibration).
 New in Milestone 2: test_loop 15, test_sim 16, test_experiments 10,
 test_fallback_policy 8, test_emu 32 (13 of them regressions for the first Mininet
 run). Integration tests (`tests/integration`, 9) are skipped without root; on real
@@ -146,16 +167,18 @@ is kept.
 
 ## Next engineering objective
 
-Validate the telemetry fixes on Mininet, as root: the integration suite twice, then
-s2 with all five controllers (15 trials, about 17 minutes in total):
+Validate the counter-refresh fix on Mininet, as root: the integration suite twice
+(now 10 tests, including steady counters), then s2 with all five controllers
+(about 17 minutes in total):
 
 ```bash
 sudo scripts/mininet_run.sh --campaign --only s2_background_on_embb_path
 ```
 
 Then:
-1. Compare with the provisional campaign: no `null` throughput, s2 background close
-   to the configured 120 Mbit/s, and fewer reservation-limit slots expected.
+1. Compare with `mininet-20261022T170942Z`. Expected: no 0.5×/1.5× offered-load
+   readings, no spurious background jumps, and so no π₀ reroutes during the surge.
+   The reservation-limit slots will remain until the meter decision.
 2. Run s1-s3 (`--campaign` alone, about 52 minutes).
 3. Fit the latency factor on Mininet seeds and check it on held-out Mininet seeds.
 
