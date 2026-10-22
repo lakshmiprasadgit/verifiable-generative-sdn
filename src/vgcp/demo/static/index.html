@@ -284,12 +284,13 @@ function renderStages(step, active) {
   const vals = !step ? Array(7).fill("–") : [
     `${Object.keys(o.state).length + Object.keys(o.demand).length} metrics` + (bad ? `, ${bad} unusable` : ""),
     ctrl === "fallback-only" ? "not used (π₀ only)" : `${d.n_candidates} proposed`,
-    ctrl === "shielded" ? `${d.n_verified} verified` : ctrl === "fallback-only" ? "π₀ checked" : (d.shield_would_accept === null ? "none" : "shadow check of top only"),
-    ctrl === "shielded" ? `${d.n_certified} certified · ${d.n_verified - d.n_certified} rejected` : ctrl === "fallback-only" ? (d.fallback_certified ? "π₀ certified" : "π₀ NOT certified") : "no certificate (baseline)",
+    ctrl.startsWith("shielded") ? `${d.n_verified} verified` : ctrl === "fallback-only" ? "π₀ checked" : (d.shield_would_accept === null ? "none" : "shadow check of top only"),
+    ctrl.startsWith("shielded") ? `${d.n_certified} certified · ${d.n_verified - d.n_certified} rejected` : ctrl === "fallback-only" ? (d.fallback_certified ? "π₀ certified" : "π₀ NOT certified") : "no certificate (baseline)",
     d.kind === "certified" ? `'${d.chosen}'` : d.kind === "fallback" ? "π₀(s) fallback" : `'${d.chosen}' unverified`,
     d.applied ? (step.decision.changes.length ? step.decision.changes.length + " change(s)" : "no change") : "FAILED: not applied",
     `t=${step.result.truth.t}` + (step.result.violations.any ? " · violation" : " · no violation")];
-  $("stages").innerHTML = STAGES.map(([h, sub], i) => `<div class="stage ${active === i ? "active" : ""}"><div class="n">${i + 1}. ${esc(sub)}</div>
+  const subs = STAGES.map(([, sub], i) => i === 4 && ctrl === "shielded-utility" ? "max predicted return (Eq 42), else π₀(s)" : sub);
+  $("stages").innerHTML = STAGES.map(([h], i) => `<div class="stage ${active === i ? "active" : ""}"><div class="n">${i + 1}. ${esc(subs[i])}</div>
     <div class="h">${h}</div><div class="v">${esc(vals[i])}</div></div>`).join("");
 }
 async function animateStages(step) {
@@ -317,6 +318,7 @@ function renderDecision(step) {
   if (d.badge === "UNCERTIFIED FALLBACK") why = `No candidate was certified, so the fallback π₀(s) was applied (paper Remark 1). The shield could <b>not</b> certify π₀ itself in this state
       (Assumption 3 not met here). This action is <b>not shown to be safe</b>.`;
   else if (d.badge === "CERTIFIED FALLBACK") why = d.chosen === "fallback" && RUN.controller === "fallback-only" ? "Fallback-only baseline: π₀(s) is always applied; here the shield also certified it." : "No candidate was certified; π₀(s) was applied and the shield certified it in this state.";
+  else if (d.badge === "CERTIFIED ACTION" && RUN.controller === "shielded-utility") why = "Among the certified candidates, the one with the highest predicted return (Eq 42) was applied after the applier checked its certificate. Predicted return is a model estimate; certified is not a guarantee for the real network.";
   else if (d.badge === "CERTIFIED ACTION") why = "The applier checked that the certificate authorizes exactly this action for this observation before applying it. Certified = predicted to satisfy constraints and intents under the nominal model; not a guarantee for the real network.";
   else if (d.badge === "UNVERIFIED (baseline)") why = `Baseline controller: the top candidate was applied without verification.` + (d.shield_would_accept === false ? " The shadow shield would have <b>rejected</b> it." : d.shield_would_accept === true ? " The shadow shield would have accepted it." : "");
   else why = "The backend refused the action (controller failure); the network keeps its previous configuration.";
@@ -334,24 +336,26 @@ function renderCandidates(step) {
   const c = step.candidates;
   if (!c.length) { $("candidates").innerHTML = '<p class="note">Fallback-only controller: no candidates are generated; π₀(s) is checked and applied every slot.</p>'; return; }
   const intents = META.intents.map((i) => i.name);
+  const hasRet = c.some((x) => isNum(x.predicted_return));
   const rows = c.map((x, i) => {
     const cert = x.certificate;
     const verdict = !cert ? '<span class="tag">not verified</span>' : x.shadow ? `<span class="tag ${cert.accepted ? "ok" : "bad"}">shadow: ${cert.accepted ? "would accept" : "would reject"}</span>`
       : `<span class="tag ${cert.accepted ? "ok" : "bad"}">${cert.accepted ? "certified" : "rejected"}</span>`;
     const why = cert && !cert.accepted ? cert.primary_failures.map((f) => esc(f)).join(", ") : "";
     const rho = cert ? intents.map((n) => { const r = cert.robustness?.[n]; return isNum(r) ? `<span style="color:${r >= (cert.rho_min[n] ?? 0) ? "var(--ok)" : "var(--bad)"}">${r.toFixed(2)}</span>` : "–"; }).join(" / ") : "–";
+    const ret = hasRet ? `<td class="num">${isNum(x.predicted_return) ? x.predicted_return.toFixed(2) : "–"}</td>` : "";
     const role = x.role === "selected" ? '<span class="tag ok">selected</span>' : x.role === "applied without verification" ? '<span class="tag warn">applied unverified</span>' : `<span class="tag">${esc(x.role)}</span>`;
     const a = x.action;
     return `<tr class="cand ${x.role === "selected" || x.role === "applied without verification" ? "sel" : ""}" data-i="${i}">
       <td><b>${esc(x.label)}</b></td><td>${SLICES.map((s) => a.path[s]).join(" ")}</td>
       <td class="num">${SLICES.map((s) => fmt(a.rate_budget_mbps[s], 1)).join(" / ")}</td>
-      <td>${verdict}</td><td>${why}</td><td class="num">${rho}</td><td>${role}</td></tr>
-      <tr class="hidden" id="cd${i}"><td colspan="7">${cert ? checkList(cert) : "Not verified by this controller."}</td></tr>`;
+      <td>${verdict}</td><td>${why}</td><td class="num">${rho}</td>${ret}<td>${role}</td></tr>
+      <tr class="hidden" id="cd${i}"><td colspan="${hasRet ? 8 : 7}">${cert ? checkList(cert) : "Not verified by this controller."}</td></tr>`;
   }).join("");
   $("candidates").innerHTML = `<table><thead><tr><th>candidate</th><th>paths U E M</th><th>budget Mb/s U / E / M</th><th>verification</th><th>failed check</th>
-    <th>robustness ${intents.map((n) => n.replace("_latency", "")).join(" / ")}</th><th>role</th></tr></thead><tbody>${rows}</tbody></table>
+    <th>robustness ${intents.map((n) => n.replace("_latency", "")).join(" / ")}</th>${hasRet ? '<th title="Eq 42: discounted Eq 27 utility over the predicted rollout (model estimate)">predicted return</th>' : ""}<th>role</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="note">Click a row for its certificate checks. Robustness ≥ ρ_min = ${META.intents[0]?.rho_min} passes (normalized, H=${META.horizon_H}).
-    Admission limits are the same for every candidate in this generator.</p>`;
+    Admission limits are the same for every candidate in this generator.${hasRet ? " Eq 42: the certified candidate with the highest <b>predicted</b> return (nominal-model estimate, not a measurement) is selected." : ""}</p>`;
   document.querySelectorAll("tr.cand").forEach((tr) => tr.onclick = () => $("cd" + tr.dataset.i).classList.toggle("hidden"));
 }
 
@@ -382,7 +386,7 @@ function renderMetrics(step) {
     card("Max link utilization", maxU.length ? fmt(Math.max(...maxU), 3) : null, "", `limit ${META.max_reserved_fraction}` + (RUN.backend === "mininet" ? " · post-shaping" : "")),
     card("Loss (worst slice)", (() => { const v = Object.values(tr.loss).filter(isNum); return v.length ? fmt(Math.max(...v), 3) : null; })(), "", RUN.backend === "mininet" ? "provisional (counter-derived)" : "simulated drops"),
     card("Verification time", fmt(1000 * step.decision.verify_time_s, 1), "ms", "this slot, all checks"),
-    card("Rejected candidates", RUN.controller === "shielded" ? String(step.decision.n_verified - step.decision.n_certified) : null, "", RUN.controller === "shielded" ? `of ${step.decision.n_verified} this slot` : "not verified by this controller"),
+    card("Rejected candidates", RUN.controller.startsWith("shielded") ? String(step.decision.n_verified - step.decision.n_certified) : null, "", RUN.controller.startsWith("shielded") ? `of ${step.decision.n_verified} this slot` : "not verified by this controller"),
     card("Fallback activations", String(fb), "", `${unc} uncertified · in ${all.length} slots`, unc ? "color:var(--bad)" : ""),
   ].join("");
   const xs = all.map((s) => s.result.truth.t);
@@ -450,7 +454,7 @@ async function renderSummary() {
   const L = labels(), B = META.latency_bounds_ms;
   const lat = Object.entries(d.latency).map(([s, x]) => `${s.toUpperCase()}: worst ${fmt(x.max_valid, 3) ?? "unavailable"} ms (bound ${x.bound_ms}), ${r["latency_violation_slots." + s]} slot(s) above · ${x.valid_slots}/${x.slots} slots with a value`).join("<br>");
   const thr = Object.entries(d.throughput).map(([s, x]) => `${s.toUpperCase()}: ${x.mean_valid === null ? "unavailable" : fmt(x.mean_valid, 1) + " Mb/s mean"} over ${x.valid_slots}/${x.slots} slots` + (x.valid_slots < x.slots ? ` <span class="tag unk">${x.slots - x.valid_slots} slot(s) missing — excluded, not zero</span>` : "")).join("<br>");
-  const shielded = d.controller === "shielded";
+  const shielded = d.controller.startsWith("shielded");
   const meaning = [];
   if (shielded) meaning.push(`The shield certified the applied action in ${d.certified_steps} of ${r.slots} slots and fell back to π₀(s) in ${r.fallback_slots}${d.fallback_uncertified_steps ? `, of which <b>${d.fallback_uncertified_steps} uncertified</b> (applied without a certificate under Remark 1; not shown safe)` : ""}.`);
   if (d.controller.startsWith("unshielded")) meaning.push(`This baseline applied unverified actions in every slot; the shadow shield would have rejected ${r.shadow_rejected_applied_slots} of them.`);
@@ -555,7 +559,7 @@ async function showHistory() {
     for (const [k, name] of cols) {
       const na = mn && k === "overload_slots";
       html += `<tr><td>${name}${na ? ' <span class="tag unk">not meaningful on Mininet</span>' : ""}</td>${ms.map((m) => { const v = modes[m][k];
-        const notApplicable = k === "candidate_rejection_rate" && m !== "shielded";  // only the shielded controller verifies candidates
+        const notApplicable = k === "candidate_rejection_rate" && !m.startsWith("shielded");  // only shielded controllers verify candidates
         return `<td class="num">${na ? "–" : notApplicable ? '<span class="tag">n/a</span>' : (v && isNum(v.mean)) ? `${fmt(v.mean, 3)} ± ${fmt(v.std, 2)}` : NA}</td>`; }).join("")}</tr>`;
     }
     html += `<tr><td>eMBB throughput Mb/s (mean)${mn ? ' <span class="tag warn">provisional</span>' : ""}</td>${ms.map((m) => { const v = modes[m].mean_throughput_mbps?.embb; return `<td class="num">${isNum(v) ? fmt(v, 1) : NA}</td>`; }).join("")}</tr>`;
