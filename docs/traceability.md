@@ -36,6 +36,7 @@ deviation or extension (see [milestone1_design.md §6](milestone1_design.md));
 | Sec 3, step 6 | deploy π₀ if no candidate is verified | `ShieldedController.step` → `CertifiedApplier.apply_fallback` | test_loop | Impl (Remark 1; uncertified π₀ is recorded) |
 | Eq 27 | utility U = α1 Q + α2 E + α3 min ρ − α4 C | `vgcp.loop.selection.UtilityModel` (weights in configs/shield.yaml `selection`) | test_selection (`test_utility_terms_by_hand`) | Impl\* (Stage 1 choice of Q, E, ρ, C: D20) |
 | Eqs 28–29, 31, 33 | objectives J, δ, ε | – | – | Later (Milestone 5 metrics) |
+| Subproblem 3 (Stage 1) | calibrate the transition model | `vgcp.models.calibration`, `python -m vgcp.experiments.calibrate` (latency safety factor of T̂; coverage on held-out runs) | test_calibration | Impl\* (T̂'s scale only, not W_ψ; configured factor kept, DECISIONS 2026-10-22) |
 | Constraint 1 | c(s_t, a_t) ≤ 0 a.s. | not claimed; needs Assumptions 2 and 3 on the real system | – | Later (empirical) |
 | Constraint 3 | a_t = π₀ if u_ψ > η | not implemented: needs W_ψ and the closed loop (Milestone 4) | – | Later |
 | Eq 42 | σ = argmax over certified candidates of Σ_{k=0..H} γ^k U over the projected rollout | `select_max_utility`, `UtilityModel.predicted_return` (reuses `VerificationShield.rollout`), mode `shielded-utility` | test_selection | Impl\* (q_ψ replaced by deterministic T̂: one rollout, no expectation; D20) |

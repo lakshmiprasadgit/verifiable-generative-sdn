@@ -24,10 +24,10 @@ and automation. Both share the status table and the quick start.
 | Milestone | Content | Status |
 |---|---|---|
 | 1 | state/action schemas, hard constraints, STL robustness, verification shield | **done** - all audit findings addressed; certificates are enforced by `CertifiedApplier` |
-| 2 | closed loop, simulated and Mininet backends, experiments | **mostly done** - loop, simulator, Mininet backend (integration tests 9/9, twice) and a first Mininet campaign. Open: telemetry fixes, re-run, results write-up, review and merge |
-| 3 | traffic, telemetry, nominal-model calibration | **not started** - the telemetry problems to fix first are identified (2026-10-22 audit) |
-| 4 | fallback, heuristic candidates, selection, closed loop | **partly done early** - state-dependent fallback π₀(s), heuristic candidates and the enforced closed loop were built in Milestone 2. Open: the utility-based selection of Eq 42 (currently "first certified candidate") |
-| 5 | experiments, metrics, reports | **started** - simulation campaigns reported (6 scenarios × 4 controllers × 5 seeds); one Mininet campaign run (provisional); dashboard |
+| 2 | closed loop, simulated and Mininet backends, experiments | **done in code** - loop, simulator, Mininet backend (integration 9/9 twice), telemetry fixes from the Mininet audit. **Open:** re-run on Mininet (root) |
+| 3 | traffic, telemetry, nominal-model calibration | **done (method and simulator evidence)** - calibration tool with held-out evaluation. **Open:** fit on fixed Mininet data; the configured factor is unchanged until then |
+| 4 | fallback, heuristic candidates, selection, closed loop | **done** - π₀(s), heuristic candidates, enforced loop, Eq 42 utility selection (`shielded-utility`). **Open:** recursive feasibility (Assumption 3) is not shown |
+| 5 | experiments, metrics, reports | **done for simulation** - 2026-10-22 campaigns (5 controllers, main and held-out seeds, calibration ablation) in `experiments/reports/`; dashboard. **Open:** Mininet campaign after the fixes |
 
 Details and evidence: [docs/STATUS.md](docs/STATUS.md). Work happens on the branch
 `feat/m2-mininet-backend`, which is not yet merged into `main`.
@@ -85,6 +85,8 @@ Each control slot (1 s) the loop does:
 | Nominal model T̂ | The shield's simple prediction model (uncalibrated) |
 | Simulator | A separate "world" with its own physics, so the shield can be wrong; used for experiments without root |
 | Mininet backend | A real emulated network (Open vSwitch, real queues and traffic); needs root |
+| Eq 42 / utility | Among certified candidates, prefer the one with the best predicted mix of throughput, energy, margin and reserved bandwidth over the next 10 slots (`shielded-utility`) |
+| Calibration | Fitting the model's latency safety factor to recorded latency, then checking it on runs it was not fitted on |
 
 ### Try it: the dashboard
 
@@ -120,18 +122,33 @@ Simulated network, no root (writes to `experiments/results/<UTC>/`):
 scripts/run_experiments.sh --scenarios experiments/scenarios/s*.yaml --seeds 1-5
 ```
 
-Emulated network, needs root. It runs the 9 integration tests twice, and with
-`--campaign` also s1-s3 × 4 controllers × 3 seeds (about 42 minutes):
+Emulated network, needs root. It runs the 9 integration tests twice. With
+`--campaign` it also runs s1-s3 × 5 controllers × 3 seeds (about 52 minutes); add
+`--only s2_background_on_embb_path` for one scenario (about 17 minutes):
 
 ```bash
 sudo scripts/mininet_run.sh
 ```
 
+Calibrate the nominal model's latency factor from a campaign (no root). This fits on
+seeds 1-5 and reports coverage on a held-out campaign:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m vgcp.experiments.calibrate --campaign experiments/results/<main> --train-seeds 1-5 --test-campaign experiments/results/<heldout> --out experiments/reports/<name>
+```
+
+Controllers: `shielded` (first certified candidate), `shielded-utility` (paper
+Eq 42: the certified candidate with the highest predicted utility), `unshielded`,
+`unshielded-fitted` (strong heuristic baseline), `fallback-only`.
+
 ### What the results do and do not say
 
-* **Simulation:** with π₀(s), the shield matched, but did not beat, a good
-  conventional heuristic. It was over-conservative when URLLC's path was loaded
-  (s3). A wrong model (s5) defeated every controller.
+* **Simulation:**
+  * With π₀(s), the shield matched, but did not beat, a good conventional heuristic.
+  * Eq 42 selection kept the same outcomes while reserving 20-32 % less bandwidth.
+  * The configured model is over-conservative (s3). A simulator-calibrated factor
+    removed s3's uncertified fallbacks on held-out seeds.
+  * A wrong model (s5) defeated every controller, and calibration did not help.
 * **Mininet integration:** the plumbing works (routes, meters, probes, cleanup).
 * **Mininet campaign (2026-10-22):** provisional. An audit found measurement
   errors:
@@ -141,7 +158,8 @@ sudo scripts/mininet_run.sh
   * latency is the maximum of only 8 pings;
   * overload cannot be observed after shaping.
 
-  Do not quote its S2 numbers before these are fixed.
+  The first two and the metric handling are fixed in code but not yet re-run on
+  Mininet. Do not quote that campaign's numbers.
 * **Nothing here** establishes real-network safety.
 
 ### Where to read more
@@ -195,7 +213,7 @@ Read this section completely before changing anything.
 
    Never invent results. Never present an uncertified action as safe.
 6. Do not modify saved results (`experiments/results/`, `experiments/reports/`). Do
-   not start long campaigns (the Mininet campaign takes about 42 minutes) unless asked.
+   not start long campaigns (the Mininet campaign takes about 52 minutes) unless asked.
 
 ### Invariants the code relies on
 
@@ -209,6 +227,10 @@ Read this section completely before changing anything.
 | The simulator is not the nominal model (separate code and parameters) | `vgcp/sim/` vs `vgcp/models/` | `test_sim` |
 | Meters before flows; a failed setup releases everything | `vgcp/emu/backend.py`, `vgcp/emu/fabric.py` | `test_emu`, `tests/integration/` |
 | Dashboard runs equal `run_trial` records (timing aside) | `vgcp/demo/session.py` | `test_demo` |
+| Eq 42 ranks only certified candidates; ties keep the generator's order | `vgcp/loop/selection.py` | `test_selection` |
+| Flow rates never compare two different rules' counters (rule age); unknown stays unknown | `vgcp/emu/telemetry.py` | `test_emu` (strict fake fabric) |
+| Summaries skip missing slots and report counts; overload is `None` on measured data | `vgcp/experiments/runner.py` | `test_experiments` |
+| Calibration never edits `configs/`; a factor is adopted only by a recorded decision | `vgcp/experiments/calibrate.py` | `test_calibration` |
 
 ### Environment facts
 
@@ -229,19 +251,19 @@ Read this section completely before changing anything.
 | `configs/` | topology, constraints, intents, shield settings (strict schema) | `vgcp.config.load_config` |
 | `src/vgcp/state.py`, `action.py` | measurements with timestamps, immutable actions, schemas | – |
 | `src/vgcp/constraints.py`, `stl/` | c(s,a); STL parser and robustness (Eqs 5-11) | – |
-| `src/vgcp/models/` | nominal model T̂, upper-bound forecast, fallback policies | – |
+| `src/vgcp/models/` | nominal model T̂, upper-bound forecast, fallback policies, calibration | `vgcp.models.calibration` |
 | `src/vgcp/shield.py` | `VerificationShield.verify` → `Certificate` | `VerificationShield.from_config` |
-| `src/vgcp/loop/` | candidate generator, controllers, `CertifiedApplier` | `ShieldedController.step(obs)` |
+| `src/vgcp/loop/` | candidate generator, controllers, `CertifiedApplier`, Eq 42 selection | `ShieldedController.step(obs)` |
 | `src/vgcp/sim/` | simulated network + scenario parser | `SimulatedNetwork` |
 | `src/vgcp/emu/` | Mininet/OVS backend; only `MininetFabric` needs root | `MininetNetwork` |
-| `src/vgcp/experiments/` | `run_trial`, `summarize`, campaign CLI | `python -m vgcp.experiments` |
+| `src/vgcp/experiments/` | `run_trial`, `summarize`, campaign CLI, calibration CLI | `python -m vgcp.experiments`, `python -m vgcp.experiments.calibrate` |
 | `src/vgcp/demo/` | dashboard server, session, static page | `python -m vgcp.demo` |
 | `experiments/scenarios/` | s1-s6 scenario YAML | – |
 | `tests/unit/`, `tests/integration/` | unit tests (no root); Mininet tests (root, skipped otherwise) | `scripts/run_unit_tests.sh` |
 
 ### How to validate a change
 
-* Any code change: `scripts/run_unit_tests.sh` (~25 s; currently 467 passed).
+* Any code change: `scripts/run_unit_tests.sh` (~25 s; currently 493 passed).
 * `vgcp/emu/` changes: the unit tests, then hand the maintainer
   `sudo scripts/mininet_run.sh` (integration suite twice). Never run it yourself.
 * Dashboard changes: `.venv/bin/python -m pytest tests/unit/test_demo.py`, then start
@@ -251,18 +273,19 @@ Read this section completely before changing anything.
 
 ### Known open issues (do not "fix" by relabelling)
 
-* **Mininet telemetry** (2026-10-22 audit, `vgcp/emu/telemetry.py`, `backend.py`):
-  * reroutes reset rule counters, giving NaN or silently wrong deltas;
-  * ingress rule counters are pre-meter, so background is under-measured;
-  * flow counters update in steps;
-  * the meter passes ~1.10× the budget at 50-70 Mb/s (cause unknown);
-  * scenarios give payload rates while counters count frames.
-* **Metrics:** NaN in one slot makes a trial mean `null`; loss turns NaN into 0 when
-  the admitted rate is unknown; Mininet `overload_slots` cannot detect overload;
-  latency is the max of 8 probes.
-* **Research gaps:** the nominal model is uncalibrated (it over-predicts URLLC latency
-  in s3); π₀(s) recursive feasibility (Assumption 3) is not shown; selection is
-  not Eq 42.
+* **Mininet telemetry** (2026-10-22 audit):
+  * Fixed in code (`824c8b1`), **not yet validated on Mininet**: reroute counter
+    resets (rule identity by age), pre-meter ingress counting (managed rate read
+    downstream), NaN handling in loss and summaries, overload on measured data.
+  * Still open: flow counters update in steps; the meter passes ~1.10× the budget at
+    50-70 Mb/s (cause unknown); scenarios give payload rates while counters count
+    frames; eMBB's 1500-byte payload fragments; latency is the max of 8 probes.
+* **Research gaps:**
+  * The latency factor is calibrated on the simulator only; the configured 1.5 is
+    kept.
+  * Eq 42 weights are illustrative.
+  * π₀(s) recursive feasibility (Assumption 3) is not shown.
+  * s5 shows that a structurally wrong model defeats the shield.
 
 ---
 

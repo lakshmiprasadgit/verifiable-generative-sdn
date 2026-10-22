@@ -1,0 +1,50 @@
+{
+ "created_utc": "2026-10-22T16:54:31.294841+00:00",
+ "git_commit": "e46f9b191b26e9c81a95535f8988387240618dfc",
+ "config_hash": "67fe7142690449589f4627c9354afe01073f6cc0508f36d67530775ccc9a9031",
+ "training": {
+  "campaign": "experiments/results/mininet-20261022T110546Z/campaign",
+  "seeds": "all",
+  "scenarios": "all"
+ },
+ "fit": {
+  "quantile": 0.99,
+  "n_points": 6354,
+  "proposed_latency_safety_factor": 1.857700571738032,
+  "train_coverage": 0.990084985835694,
+  "ratio_by_slice": {
+   "embb": {
+    "n": 2080,
+    "median": 0.9227778521367362,
+    "p90": 1.0225484440223827,
+    "p99": 1.8861317741034418,
+    "max": 3.0698656869805703
+   },
+   "mmtc": {
+    "n": 2137,
+    "median": 0.9554535324012567,
+    "p90": 1.0024405399340814,
+    "p99": 1.3078737814051247,
+    "max": 2.2398294473361227
+   },
+   "urllc": {
+    "n": 2137,
+    "median": 0.7605536040996987,
+    "p90": 0.9849588852540613,
+    "p99": 2.901024930204222,
+    "max": 19.44964531740377
+   }
+  },
+  "configured_latency_safety_factor": 1.5,
+  "train_coverage_configured": 0.9804847340258105
+ },
+ "held_out": {
+  "experiments/results/mininet-20261022T110546Z/campaign": {
+   "backend": "mininet (measured)",
+   "n_points": 0,
+   "coverage_proposed": null,
+   "coverage_configured": null,
+   "by_scenario": {}
+  }
+ }
+}

@@ -17,6 +17,7 @@ are **provisional** because of telemetry errors (see "Emulated network runs" bel
 | RQ4 | How often is an action the shield certified actually unsafe when the model is wrong? | s5 |
 | RQ5 | What breaks when actions take effect late, or are lost? | s6 |
 | RQ6 | Does a state-dependent fallback π₀(s) change the answers (ablation)? | all, static vs capacity-aware π₀ |
+| RQ7 | What does utility-based selection (Eq 42) change, and does a calibrated model reduce over-conservatism? | all, 2026-10-22 campaign |
 
 ## Controllers (same candidate generator and preference order in all)
 
@@ -167,11 +168,77 @@ the shielded controller with the static π₀, for the ablation.
 8. **RQ5 - delay and outage.** One slot of actuation delay added about one violation
    slot per surge; with π₀(s) the shield again matched the strong baseline.
 
+## Results - 2026-10-22 campaign (after the telemetry and metric fixes)
+
+**Setup.**
+* Commit `e46f9b1`, clean tree; simulated backend.
+* 6 scenarios × 5 controllers: the four above plus `shielded-utility` (paper Eq 42,
+  D20).
+* Seeds 1-5 (`experiments/reports/2026-10-22-main/`) and held-out seeds 6-10
+  (`2026-10-22-heldout/`).
+* Ablation on the held-out seeds with the calibrated latency safety factor
+  (`2026-10-22-heldout-k1.109/`) for the shielded, shielded-utility and
+  fallback-only controllers.
+
+Seeds 1-5, mean over seeds (std as in the reports). "reserved" is the mean total
+rate budget of the applied actions (new metric).
+
+| scenario | controller | violation slots | uncertified fallback | reserved Mbit/s | eMBB Mbit/s |
+|---|---|---|---|---|---|
+| s1 | shielded / shielded-utility | 0 / 0 | 0 / 0 | 155 / 105 | 80.3 / 80.3 |
+| s1 | unshielded / unshielded-fitted / fallback-only | 0 / 0 / 0 | 0 / 0 / 0 | 155 / 105 / 110 | 80.3 |
+| s2 | shielded / shielded-utility | 0.8 / 0.8 | 0 / 0 | 125 / 91.2 | 73.0 / 73.0 |
+| s2 | unshielded / unshielded-fitted / fallback-only | 16.4 / 0.8 / 0.8 | 0 / 0 / 0 | 155 / 91.3 / 96.2 | 79.8 / 73.0 / 73.0 |
+| s3 | shielded / shielded-utility | 0 / 0 | 20 / 20 | 140 / 107 | 80.3 |
+| s3 | unshielded / unshielded-fitted / fallback-only | 0 / 0 / 0 | 0 / 0 / 20 | 155 / 105 / 110 | 80.3 |
+| s4 | shielded / shielded-utility | 0 / 0 | 13 / 13 | 145 / 116 | 91.0 / 90.6 |
+| s4 | unshielded / unshielded-fitted / fallback-only | 0 / 0 / 0 | 0 / 0 / 13 | 155 / 112 / 110 | 93.7 / 86.7 / 86.9 |
+| s5 | all five | 60 | 0 | 105-155 | 80.3 |
+| s6 | shielded / shielded-utility | 1.6 / 1.6 | 0 / 0 | 125 / 91.2 | 72.9 |
+| s6 | unshielded / unshielded-fitted / fallback-only | 16.4 / 1.6 / 1.6 | 0 / 0 / 0 | 155 / 91.3 / 96.2 | 79.8 / 72.9 / 72.9 |
+
+**Findings.**
+1. **The fixes did not change the shielded results.** Violation, fallback and
+   rejection figures of the shielded, unshielded and fallback-only controllers equal
+   the 2026-10-21 campaign. One baseline changed: in s4 `unshielded-fitted` now
+   delivers 86.7 instead of 93.3 Mbit/s eMBB, with no violation either way. Its
+   generator no longer reads frozen or missing demand and background as 0 (D21 in
+   DECISIONS: unknown demand keeps π₀'s budget).
+2. **Eq 42 selection (RQ7).** In every scenario `shielded-utility` had exactly the
+   same violations, fallbacks and delivered throughput as first-certified, but
+   reserved 20-32 % less bandwidth: e.g. s1 155 → 105 and s2 125 → 91.2 Mbit/s.
+   It picks `demand-matched` where first-certified takes `greedy-embb`. In this
+   simulator a budget above demand does not change the outcome, so the gain is
+   only the reservation. The weights are illustrative, so the choice among
+   certified candidates depends on them.
+3. **Calibration (Milestone 3, simulator).**
+   * The recorded/analytic latency ratio has median 1.00 and p99 1.11 for every
+     slice in the nominal scenarios, so the configured factor 1.5 is about 35 %
+     over-conservative there.
+   * k = 1.109, fitted on seeds 1-5 of s1-s4 and s6, covers 98.3 % of the held-out
+     points in each of those scenarios (target 99 %).
+   * On the held-out seeds it removed all 20 uncertified fallbacks in s3, with no
+     new violation, and changed nothing else (`2026-10-22-heldout-k1.109`).
+   * It does **not** fix s5: coverage 40 % (configured 1.5: 65 %). A structural
+     model error is not a scale error.
+4. **Calibration (Mininet, provisional).** On the 2026-10-22 Mininet campaign the
+   ratio's median is below 1 (URLLC 0.76) but its tail is heavy (URLLC p99 2.9,
+   max 19), so 99 % coverage would need k = 1.86. That data carries known telemetry
+   errors and latency is the max of 8 pings
+   (`experiments/reports/2026-10-22-calibration-mininet-provisional/`).
+   The simulator and the emulator disagree, so **the configured k = 1.5 is kept**
+   (DECISIONS, 2026-10-22).
+
 ## Limitations of these results
 
-* Simulation only; the simulator's fidelity is unvalidated until the Mininet runs.
-* One topology, one demand mix, five seeds; standard deviations are across seeds only.
-* The selection rule is "first certified", not the paper's Eq 42.
+* Simulation only, except the provisional Mininet campaign. The simulator's
+  fidelity is unvalidated.
+* One topology, one demand mix, five seeds per campaign; standard deviations are
+  across seeds only.
+* Eq 42 uses illustrative weights and the uncalibrated T̂; a higher predicted return
+  is not a measured benefit.
+* The sim calibration is fitted to this project's own simulator; it shows the
+  method and its held-out check, not the right factor for a real network.
 * Thresholds and scales are illustrative, not 6G requirements.
 
 ## Emulated network runs (Mininet) - integration green, first campaign provisional

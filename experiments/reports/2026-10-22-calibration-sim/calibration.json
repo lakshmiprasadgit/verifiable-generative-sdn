@@ -1,0 +1,100 @@
+{
+ "created_utc": "2026-10-22T16:52:53.084809+00:00",
+ "git_commit": "e46f9b191b26e9c81a95535f8988387240618dfc",
+ "config_hash": "67fe7142690449589f4627c9354afe01073f6cc0508f36d67530775ccc9a9031",
+ "training": {
+  "campaign": "experiments/results/2026-10-22-main",
+  "seeds": "all",
+  "scenarios": [
+   "s1_steady",
+   "s2_background_on_embb_path",
+   "s3_background_on_urllc_path",
+   "s4_telemetry_faults",
+   "s6_actuation_delay_and_failures"
+  ]
+ },
+ "fit": {
+  "quantile": 0.99,
+  "n_points": 22380,
+  "proposed_latency_safety_factor": 1.1092132634324325,
+  "train_coverage": 0.9910634495084897,
+  "ratio_by_slice": {
+   "embb": {
+    "n": 7380,
+    "median": 1.0016965998493437,
+    "p90": 1.0665912902617585,
+    "p99": 1.1082670298323438,
+    "max": 1.1290986731119026
+   },
+   "mmtc": {
+    "n": 7500,
+    "median": 0.9978263487254065,
+    "p90": 1.0623304692841333,
+    "p99": 1.112683365991478,
+    "max": 1.1477445156303379
+   },
+   "urllc": {
+    "n": 7500,
+    "median": 0.9973207895442956,
+    "p90": 1.0605259267663534,
+    "p99": 1.1056983517362073,
+    "max": 1.121721937584262
+   }
+  },
+  "configured_latency_safety_factor": 1.5,
+  "train_coverage_configured": 1.0
+ },
+ "held_out": {
+  "experiments/results/2026-10-22-main": {
+   "backend": "simulated",
+   "n_points": 4500,
+   "coverage_proposed": 0.3877777777777778,
+   "coverage_configured": 0.6477777777777778,
+   "by_scenario": {
+    "s5_model_mismatch": {
+     "n": 4500,
+     "coverage_proposed": 0.3877777777777778,
+     "coverage_configured": 0.6477777777777778
+    }
+   }
+  },
+  "experiments/results/2026-10-22-heldout": {
+   "backend": "simulated",
+   "n_points": 26850,
+   "coverage_proposed": 0.884729981378026,
+   "coverage_configured": 0.9407821229050279,
+   "by_scenario": {
+    "s1_steady": {
+     "n": 4500,
+     "coverage_proposed": 0.9833333333333333,
+     "coverage_configured": 1.0
+    },
+    "s2_background_on_embb_path": {
+     "n": 4433,
+     "coverage_proposed": 0.983081434694338,
+     "coverage_configured": 1.0
+    },
+    "s3_background_on_urllc_path": {
+     "n": 4500,
+     "coverage_proposed": 0.9833333333333333,
+     "coverage_configured": 1.0
+    },
+    "s4_telemetry_faults": {
+     "n": 4500,
+     "coverage_proposed": 0.9833333333333333,
+     "coverage_configured": 1.0
+    },
+    "s5_model_mismatch": {
+     "n": 4500,
+     "coverage_proposed": 0.39555555555555555,
+     "coverage_configured": 0.6466666666666666
+    },
+    "s6_actuation_delay_and_failures": {
+     "n": 4417,
+     "coverage_proposed": 0.9830201494226851,
+     "coverage_configured": 1.0
+    }
+   }
+  }
+ }
+}

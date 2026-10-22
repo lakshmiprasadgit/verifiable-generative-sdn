@@ -2,7 +2,11 @@
 # Milestone 2 Mininet runs. Needs root.
 #   sudo scripts/mininet_run.sh              integration tests only, twice (default)
 #   sudo scripts/mininet_run.sh --campaign   the same, then the closed-loop campaign
-#                                            (about 40 minutes), only if every pass is green
+#                                            (s1-s3 x 5 controllers x 3 seeds, about 52 minutes),
+#                                            only if every pass is green
+#   sudo scripts/mininet_run.sh --campaign --only s2_background_on_embb_path
+#                                            campaign restricted to the named scenario(s),
+#                                            comma-separated (s2 alone: about 17 minutes)
 # The integration file runs PASSES times (default 2) without any cleanup in between,
 # so a leaked interface, bridge or process from one pass fails the next.
 # Everything is written to experiments/results/mininet-<UTC time>/ and owned by the
@@ -13,11 +17,14 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo: sudo $0 $*"; exit 1; fi
 CAMPAIGN=0
-for arg in "$@"; do
-  case "$arg" in
+ONLY="s1_steady,s2_background_on_embb_path,s3_background_on_urllc_path"
+while [ $# -gt 0 ]; do
+  case "$1" in
     --campaign) CAMPAIGN=1 ;;
-    *) echo "unknown argument: $arg (use --campaign or nothing)"; exit 2 ;;
+    --only) shift; ONLY="${1:-}" ;;
+    *) echo "unknown argument: $1 (use --campaign [--only scenario[,scenario]])"; exit 2 ;;
   esac
+  shift
 done
 PASSES="${PASSES:-2}"
 OWNER="${SUDO_USER:-root}"
@@ -48,9 +55,14 @@ if [ "$IT" -ne 0 ]; then
   echo "integration tests failed (exit $IT): campaign not run" | tee "$OUT/campaign.log"
 elif [ "$CAMPAIGN" -eq 1 ]; then
   echo "== campaign" | tee "$OUT/campaign.log"
-  .venv/bin/python -m vgcp.experiments --backend mininet \
-      --scenarios experiments/scenarios/s1_steady.yaml experiments/scenarios/s2_background_on_embb_path.yaml \
-                  experiments/scenarios/s3_background_on_urllc_path.yaml \
+  FILES=()
+  IFS=',' read -ra NAMES <<< "$ONLY"
+  for n in "${NAMES[@]}"; do
+    f="experiments/scenarios/$n.yaml"
+    if [ ! -f "$f" ]; then echo "no such scenario: $n" | tee -a "$OUT/campaign.log"; chown -R "$OWNER": "$OUT"; exit 2; fi
+    FILES+=("$f")
+  done
+  .venv/bin/python -m vgcp.experiments --backend mininet --scenarios "${FILES[@]}" \
       --seeds 1-3 --out "$OUT/campaign" 2>&1 | tee -a "$OUT/campaign.log"
   mn -c >/dev/null 2>&1
 else

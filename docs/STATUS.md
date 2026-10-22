@@ -5,22 +5,24 @@ claim about the safety of a real network.
 
 ## Where we are
 
-**Milestone 2 in progress.** The closed control loop runs end to end against a
-*simulated* network. The Mininet / Open vSwitch backend is implemented and
-unit-tested without root. Its first privileged run failed all 7 integration tests;
-after the fixes (below, commit `692ba3b`) the **9 integration tests passed on real
-Mininet in two consecutive passes** (2026-10-21 17:22 UTC). The first Mininet
-campaign ran on 2026-10-22 (36 trials, complete), but an audit found measurement
-errors in its telemetry, so its results are **provisional** and not yet reported
-(below). A dashboard now shows the loop live on the simulated network.
+**Every Stage 1 milestone has its implementation in place; what remains is
+validation on the emulated network and team decisions.**
+
+* **Simulation:** the closed loop runs end to end, with first-certified and Eq 42
+  selection, a calibration tool, and campaigns on main and held-out seeds.
+* **Mininet:** the backend passed its 9 integration tests twice (2026-10-21). Its
+  first campaign (2026-10-22) exposed telemetry errors, which are fixed in code
+  (`824c8b1`).
+* **Not yet re-run on Mininet**, which needs root: the integration suite and the
+  s2 campaign. Until then, the Mininet results stay provisional.
 
 | Milestone | Scope | Status |
 |---|---|---|
-| 1 | state/action schemas, constraints, STL robustness, verification shield | done; all audit findings addressed |
-| 2 | closed loop, network backends, telemetry, experiments | **mostly done**: loop, simulated backend, experiments, Mininet backend (integration green twice), first Mininet campaign (provisional). Open: telemetry fixes, re-run, write-up, review and merge |
-| 3 | traffic, telemetry calibration of the nominal model | not started; telemetry problems identified by the 2026-10-22 audit |
-| 4 | fallback, candidates, Eq 42 selection, closed loop | partly done early: π₀(s), heuristic candidates and the enforced closed loop exist; Eq 42 selection not started |
-| 5 | experiment campaign and reports | started: simulation campaigns reported; one provisional Mininet campaign; dashboard |
+| 1 | state/action schemas, constraints, STL robustness, verification shield | **done**; all audit findings addressed |
+| 2 | closed loop, network backends, telemetry, experiments | **done in code**: telemetry and metric fixes from the Mininet audit (`824c8b1`). **Open:** re-run the integration suite and s2 on Mininet (root) |
+| 3 | traffic, telemetry, nominal-model calibration | **done (method and simulator evidence)**: calibration tool, held-out evaluation, provisional Mininet fit. The configured factor is deliberately unchanged. **Open:** fit and adopt on fixed Mininet data |
+| 4 | fallback, candidates, selection, closed loop | **done**: π₀(s), heuristic candidates, enforced closed loop, Eq 42 utility selection (`shielded-utility`, D20). **Open:** Assumption 3 (recursive feasibility) is still not shown |
+| 5 | experiments, metrics, reports | **done for simulation**: 2026-10-22 campaigns (main, held-out, calibration ablation) in `experiments/reports/`; dashboard. **Open:** a Mininet campaign after the fixes |
 
 ## Done in Milestone 2 (2026-10-21)
 
@@ -100,6 +102,22 @@ traced the anomalies to the emulation's telemetry, not to the controller:
 These numbers are not to be quoted as results until the telemetry is fixed and s2
 re-run.
 
+## Done on 2026-10-22 (after the Mininet audit)
+
+| Commit | What |
+|---|---|
+| `824c8b1` | Telemetry: reinstall-safe rule rates (by rule age), post-meter background, NaN-aware loss and summaries, overload "not observable" on measured data, generator never reads unknowns as 0 (D21). Stricter fake fabric; regressions fail on the old code |
+| `7eb7e26`, `7720cde` | Eq 42 selection with an Eq 27 utility (`shielded-utility`, D20); dashboard shows predicted returns |
+| `035a480` | Calibration tool (`python -m vgcp.experiments.calibrate`), `--latency-safety-factor` ablation |
+| `e46f9b1` | Reserved-bandwidth metric |
+
+Results: docs/EXPERIMENTS.md, "Results - 2026-10-22 campaign". In short:
+* the fixes left the shielded results unchanged;
+* Eq 42 reserves 20-32 % less bandwidth with identical outcomes;
+* a simulator-calibrated factor (1.109) removes s3's 20 uncertified fallbacks on
+  held-out seeds without new violations, but does not fix s5;
+* the provisional Mininet fit disagrees (1.86), so the configured 1.5 is kept.
+
 ## Dashboard (2026-10-22)
 
 `scripts/run_dashboard.sh` (no root) steps the real loop on the simulated network
@@ -119,7 +137,7 @@ labelled as historical. Its records equal `run_trial`'s (tested in `test_demo`).
 
 ## Tests
 
-`scripts/run_unit_tests.sh` - **467 passed, 0 failed** (no root, no Mininet; includes test_demo 7).
+`scripts/run_unit_tests.sh` - **493 passed, 0 failed** (no root, no Mininet; includes test_demo, test_selection, test_calibration).
 New in Milestone 2: test_loop 15, test_sim 16, test_experiments 10,
 test_fallback_policy 8, test_emu 32 (13 of them regressions for the first Mininet
 run). Integration tests (`tests/integration`, 9) are skipped without root; on real
@@ -128,26 +146,37 @@ is kept.
 
 ## Next engineering objective
 
-Fix the Mininet telemetry found by the 2026-10-22 audit:
-1. make the fake fabric strict (counter resets, pre-meter ingress counters);
-2. fix reroute counter handling and meter-aware background;
-3. use NaN-aware metrics with valid-slot counts.
+Validate the telemetry fixes on Mininet, as root: the integration suite twice, then
+s2 with all five controllers (15 trials, about 17 minutes in total):
 
-Then run the integration suite twice and re-run s2 on Mininet (12 trials, about
-14 minutes) before s1-s3. Decisions needed from the team: rate units (payload or
-frames, eMBB packet size), probes per slot, and an overload definition on Mininet.
-After that, record the results in EXPERIMENTS.md, then review
-`feat/m2-mininet-backend` and decide on merging it into `main` (not merged).
+```bash
+sudo scripts/mininet_run.sh --campaign --only s2_background_on_embb_path
+```
+
+Then:
+1. Compare with the provisional campaign: no `null` throughput, s2 background close
+   to the configured 120 Mbit/s, and fewer reservation-limit slots expected.
+2. Run s1-s3 (`--campaign` alone, about 52 minutes).
+3. Fit the latency factor on Mininet seeds and check it on held-out Mininet seeds.
+
+Team decisions still needed:
+* rate units (payload or frames) and eMBB's packet size (1500 bytes fragments);
+* probes per slot (latency is the max of 8);
+* the meter's ~1.10× pass-through.
 
 ## Known limitations
 
 * All loop results so far are from simulation; the simulator is unvalidated. The
   Mininet integration tests validate the emulation's plumbing, not the controller.
-* The nominal model is uncalibrated and not shown to be conservative (s5 shows the
-  consequence).
+* The nominal model's factor is calibrated only on the simulator, and on Mininet only
+  provisionally; the configured 1.5 is kept (DECISIONS). s5 shows that calibration
+  cannot fix a structurally wrong model.
 * π₀(s) is not shown to be recursively feasible (Assumption 3); uncertified
   fallbacks are counted in every experiment.
-* Selection is "first certified candidate", not Eq 42.
+* Eq 42 (`shielded-utility`) uses illustrative weights and the nominal model's
+  predictions; `shielded` keeps first-certified.
+* The Mininet telemetry fixes are unit-tested against a stricter fake fabric only,
+  until the root re-run.
 * Background load is held constant over the horizon and is under-measured during
   overload (post-drop counters).
 * No mMTC loss intent is active (the model does not predict loss).

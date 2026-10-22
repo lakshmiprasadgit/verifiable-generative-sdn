@@ -305,3 +305,47 @@ extra rollout each.
   grounded in operator preferences.
 * Utility is predicted with the uncalibrated T̂, so a high predicted return is not a
   measured benefit.
+
+---
+
+## 2026-10-22 · Latency safety factor: calibrate, but keep 1.5 for now (Milestone 3)
+
+**Problem.** T̂ multiplies its analytic latency by k = 1.5, which was never fitted.
+In s3 it predicts URLLC above 1 ms where the simulated (at most 0.73 ms over all
+s3 trials) and the emulated (typically about 0.45 ms) latency stay below, so π₀ is uncertifiable for 20 slots.
+
+**Done.** `vgcp.experiments.calibrate` fits k as the 99 % quantile of recorded /
+analytic latency and reports coverage on held-out runs.
+* **Simulator:** k = 1.109, held-out coverage 98.3 % per nominal scenario. With it,
+  s3's 20 uncertified fallbacks disappear without new violations.
+* **Mininet (provisional):** k = 1.86, driven by a heavy tail in data with known
+  telemetry errors and only 8 probes per slot.
+
+**Alternatives.**
+* (a) Adopt 1.109: calibrated to our own simulator, which would tune the shield to
+  the evaluator.
+* (b) Adopt 1.86: fitted to faulty measurements.
+* (c) Keep 1.5 and publish both fits, with the ablation.
+
+**Chosen.** (c). `configs/shield.yaml` is unchanged; `--latency-safety-factor` runs
+the ablation.
+
+**Revisit** after the telemetry fixes are re-run on Mininet with more probes per
+slot. Then fit k on Mininet seeds and check it on held-out Mininet seeds before
+adopting it.
+
+---
+
+## 2026-10-22 · D21: the candidate generator never reads unknown measurements as 0
+
+**Problem.** The heuristic generator treated unmeasured demand as 0, shrinking
+budgets to the minimum. It treated unmeasured background as 0, i.e. a free link.
+On Mininet this throttled eMBB to 1 Mbit/s after every reroute.
+
+**Chosen.** Unknown demand keeps π₀'s budget for that slice; a link with unknown
+background has no room, so it is never chosen as "least loaded" or "fitted".
+
+**Consequence.** The baselines' behaviour changes only when data are missing. In
+the 2026-10-22 simulation campaign, s4's `unshielded-fitted` eMBB throughput fell
+from 93.3 to 86.7 Mbit/s with no violation either way. The shielded controllers
+were unaffected, because they reject missing data anyway.
