@@ -7,6 +7,8 @@ from the shield's predictions.
 
 Controller modes (same candidate generator and preference order in all of them):
   shielded       first certified candidate, else pi_0
+  shielded-utility  the certified candidate with the highest predicted return (Eq 42),
+                 else pi_0
   unshielded     first candidate (greedy preference), unverified; a shadow shield
                  records what it would have decided
   unshielded-fitted  same, but the capacity-fitted heuristic is preferred first -
@@ -32,11 +34,12 @@ from vgcp.loop import (
     UncheckedApplier,
     UnshieldedController,
 )
+from vgcp.loop.selection import UtilityModel
 from vgcp.shield import VerificationShield, fallback_policy
 from vgcp.sim import Scenario, SimulatedNetwork
 from vgcp.stl import predicates
 
-MODES = ("shielded", "unshielded", "unshielded-fitted", "fallback-only")
+MODES = ("shielded", "shielded-utility", "unshielded", "unshielded-fitted", "fallback-only")
 RECOVERY_RUN = 3  # consecutive violation-free slots that count as recovered
 
 
@@ -64,6 +67,9 @@ def build_controller(cfg: ProjectConfig, mode: str, backend, seed: int, n_random
         gen = wrap_generator(gen)
     if mode == "shielded":
         return ShieldedController(cfg, shield, gen, CertifiedApplier(backend, fallback_policy(cfg), cfg.shield.max_staleness_s))
+    if mode == "shielded-utility":
+        return ShieldedController(cfg, shield, gen, CertifiedApplier(backend, fallback_policy(cfg), cfg.shield.max_staleness_s),
+                                  utility=UtilityModel(cfg), mode=mode)
     if mode in ("unshielded", "unshielded-fitted"):
         return UnshieldedController(cfg, gen, UncheckedApplier(backend), shadow_shield=shield)
     if mode == "fallback-only":

@@ -1,9 +1,10 @@
 """Controllers for one control slot (paper Sec 3).
 
 ShieldedController   - verifies every candidate; applies the first certified one in the
-                       generator's order of preference (the Milestone 2 selection rule;
-                       the utility-based rule of Eq 42 is Milestone 4); otherwise applies
-                       pi_0 (Remark 1) and records whether pi_0 itself was certified.
+                       generator's order of preference (Milestone 2 rule), or, given a
+                       UtilityModel, the certified one with the highest predicted return
+                       (paper Eq 42, Milestone 4); otherwise applies pi_0 (Remark 1) and
+                       records whether pi_0 itself was certified.
 UnshieldedController - baseline: applies the generator's first candidate unverified. It
                        can optionally ask the shield, without acting on the answer
                        ("shadow" verification), so we can count how often it applied
@@ -45,6 +46,8 @@ class StepRecord:
     decision_time_s: float = 0.0
     action: dict[str, Any] = field(default_factory=dict)
     detail: str = ""
+    selection: str | None = None  # "first-certified" | "max-utility" (shielded modes only)
+    predicted_returns: dict[str, float] = field(default_factory=dict)  # Eq 42 objective per certified candidate
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -65,26 +68,34 @@ class ShieldedController:
     mode = "shielded"
 
     def __init__(self, cfg: ProjectConfig, shield: VerificationShield,
-                 generator: CandidateGenerator, applier: CertifiedApplier) -> None:
+                 generator: CandidateGenerator, applier: CertifiedApplier, utility=None,
+                 mode: str | None = None) -> None:
         self.cfg, self.shield, self.generator, self.applier = cfg, shield, generator, applier
+        self.utility = utility  # vgcp.loop.selection.UtilityModel -> Eq 42; None -> first certified
+        if mode is not None:
+            self.mode = mode
 
     def step(self, obs: Observation) -> StepRecord:
         t0 = time.perf_counter()
         candidates = self.generator.propose(obs)
         reasons: Counter[str] = Counter()
-        n_certified, chosen, verify = 0, None, 0.0
+        certified, verify = [], 0.0
         for cand in candidates:
             v0 = time.perf_counter()
             cert = self.shield.verify(obs.state, obs.demand, cand.action, obs.now_s)
             verify += time.perf_counter() - v0
             if cert.accepted:
-                n_certified += 1
-                if chosen is None:
-                    chosen = (cand, cert)
+                certified.append((cand, cert))
             else:
                 reasons.update(primary_failures(cert))
-        common = dict(n_candidates=len(candidates), n_verified=len(candidates), n_certified=n_certified,
-                      rejection_reasons=dict(reasons))
+        chosen, returns = (certified[0] if certified else None), {}
+        if certified and self.utility is not None:
+            from vgcp.loop.selection import select_max_utility
+            chosen, returns = select_max_utility(self.utility, self.shield, obs, certified)
+        common = dict(n_candidates=len(candidates), n_verified=len(candidates), n_certified=len(certified),
+                      rejection_reasons=dict(reasons),
+                      selection="max-utility" if self.utility is not None else "first-certified",
+                      predicted_returns=returns)
         if chosen is not None:
             cand, cert = chosen
             rec = self.applier.apply_certified(cand.action, cert, obs)

@@ -33,9 +33,9 @@ deviation or extension (see [milestone1_design.md §6](milestone1_design.md));
 | Sec 2.4, Eq 21 | generative policy G_θ | – | – | Not in Stage 1 |
 | Sec 2.5, Eqs 22–23 | world model W_ψ, uncertainty u_ψ | not implemented; Stage 1 has no learned model. W_ψ is not the shield's `TransitionModel` (that is T̂) | – | Later |
 | Def 2 | OOD trigger u_ψ > η ⇒ fallback | not implemented: needs W_ψ (no η setting). Separate extension D12: shield check `nominal_model_domain` rejects rollouts outside T̂'s validity domain | `test_out_of_domain_rollout_rejects`, `test_d12_removes_actions_that_eq17_admits` (D12) | Later (D12 is an extension, not Def 2) |
-| Sec 3, step 6 | deploy π₀ if no candidate is verified | – | – | Later (Milestone 4) |
-| Eq 27 | utility U | – | – | Later (Milestone 4) |
+| Sec 3, step 6 | deploy π₀ if no candidate is verified | `ShieldedController.step` → `CertifiedApplier.apply_fallback` | test_loop | Impl (Remark 1; uncertified π₀ is recorded) |
+| Eq 27 | utility U = α1 Q + α2 E + α3 min ρ − α4 C | `vgcp.loop.selection.UtilityModel` (weights in configs/shield.yaml `selection`) | test_selection (`test_utility_terms_by_hand`) | Impl\* (Stage 1 choice of Q, E, ρ, C: D20) |
 | Eqs 28–29, 31, 33 | objectives J, δ, ε | – | – | Later (Milestone 5 metrics) |
 | Constraint 1 | c(s_t, a_t) ≤ 0 a.s. | not claimed; needs Assumptions 2 and 3 on the real system | – | Later (empirical) |
 | Constraint 3 | a_t = π₀ if u_ψ > η | not implemented: needs W_ψ and the closed loop (Milestone 4) | – | Later |
-| Eq 42 | selection rule σ | – | – | Later (Milestone 4) |
+| Eq 42 | σ = argmax over certified candidates of Σ_{k=0..H} γ^k U over the projected rollout | `select_max_utility`, `UtilityModel.predicted_return` (reuses `VerificationShield.rollout`), mode `shielded-utility` | test_selection | Impl\* (q_ψ replaced by deterministic T̂: one rollout, no expectation; D20) |

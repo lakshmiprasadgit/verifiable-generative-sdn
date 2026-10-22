@@ -26,7 +26,7 @@ def test_trial_runs_and_metrics_are_consistent(cfg, mode):
     s = summarize(cfg, sc, rows)
     assert 0 <= s["overload_slots"] <= s["any_violation_slots"] <= 8
     assert s["disturbance_start"] == 3
-    if mode == "shielded":
+    if mode.startswith("shielded"):
         assert s["candidate_rejection_rate"] is not None
     else:
         assert s["candidate_rejection_rate"] is None  # nothing was verified before acting

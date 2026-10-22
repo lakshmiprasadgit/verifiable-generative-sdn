@@ -29,6 +29,16 @@ nominal_model:
 # measured background load. See src/vgcp/models/fallback.py and docs/DECISIONS.md.
 fallback_policy: capacity_aware
 
+# Eq 42 selection (controller mode "shielded-utility"): among certified candidates,
+# maximize sum_{k=0..H} gamma^k U over the shield's own rollout, with the Eq 27 utility
+# U = qos*Q + energy*E + robustness*min rho - cost*C (terms in src/vgcp/loop/selection.py,
+# extension D20). Weights and scales are illustrative, not tuned. The "shielded" mode
+# keeps the first-certified rule and ignores this block.
+selection:
+  discount_gamma: 0.9
+  weights: {qos: 1.0, energy: 0.1, robustness: 1.0, cost: 0.5}
+  scales: {qos_mbps: 100.0, energy_w: 10.0, cost_mbps: 100.0}
+
 # Base fallback action (the static pi_0). Must be in A (checked at load).
 # Assumption 3 (recursive feasibility) is NOT yet established; Milestone 4.
 fallback_action:

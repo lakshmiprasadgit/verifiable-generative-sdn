@@ -270,3 +270,38 @@ The fake fabric now resets counters on reinstall and reports rule ages.
 
 **Uncertainty.** Verified with unit tests against the stricter fake fabric only. The
 privileged integration suite and an s2 re-run on Mininet are still needed.
+
+---
+
+## 2026-10-22 · Eq 42 selection with an Eq 27 utility (Milestone 4, extension D20)
+
+**Problem.** The shielded controller applied the first certified candidate in the
+generator's order. Paper Eq 42 instead selects the certified candidate with the
+highest discounted cumulative utility (Eq 27) over the H-step rollout.
+
+**Chosen.**
+* A new controller mode `shielded-utility` implements Eq 42 over the shield's own
+  projected rollout (`VerificationShield.rollout`, Eqs 12-13).
+* The world model q_ψ is replaced by the deterministic nominal model T̂, so the
+  expectation is a single rollout.
+* Eq 27's terms in Stage 1:
+  * Q = total slice throughput;
+  * E = −power, since throughput is already in Q;
+  * ρ = the tightest normalized intent predicate at that step;
+  * C = total reserved rate budget.
+* Weights and scales live in `configs/shield.yaml` (`selection`), are validated, and
+  are illustrative.
+* Only certified candidates are ranked, so selection cannot weaken verification.
+  Ties keep the generator's order.
+* `shielded` keeps the first-certified rule, so earlier results remain reproducible
+  and the two rules can be compared.
+
+**Consequences.** Steps record `selection` and each certified candidate's predicted
+return. The rollout is recomputed per certified candidate, which costs about one
+extra rollout each.
+
+**Uncertainty.**
+* The weights change which certified action is chosen; they are not tuned and not
+  grounded in operator preferences.
+* Utility is predicted with the uncalibrated T̂, so a high predicted return is not a
+  measured benefit.

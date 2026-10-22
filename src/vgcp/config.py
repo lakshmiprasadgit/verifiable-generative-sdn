@@ -232,6 +232,8 @@ _SCHEMA = _Obj({
         "fallback_action": _Obj({
             "path": None, "rate_budget_mbps": None, "admission_limit": None, "link_power": None,
         }),
+        # optional; Eq 42 / Eq 27 settings, validated by vgcp.loop.selection (D20)
+        "selection": _Obj({"discount_gamma": None, "weights": None, "scales": None}),
     }),
 }, label="section")
 

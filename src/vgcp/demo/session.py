@@ -43,6 +43,9 @@ class RecordingShield:
     def __init__(self, shield) -> None:
         self.inner, self.log = shield, []
 
+    def __getattr__(self, name):  # rollout() etc. go to the real shield
+        return getattr(self.inner, name)
+
     def verify(self, state, demand, action, now_s):
         cert = self.inner.verify(state, demand, action, now_s)
         self.log.append(cert)
@@ -196,16 +199,16 @@ class DemoRun:
         certs = list(self.shield.log)
         cands = self.gen.last or []
         out = []
-        if self.mode == "shielded":
-            chosen_seen = False
+        if self.mode in ("shielded", "shielded-utility"):
             for c, cert in zip(cands, certs):
-                if cert.accepted and not chosen_seen and rec.kind == "certified":
-                    role, chosen_seen = "selected", True
+                if cert.accepted and rec.kind == "certified" and c.label == rec.chosen:
+                    role = "selected"
                 elif cert.accepted:
                     role = "certified, not selected"
                 else:
                     role = "rejected"
-                out.append({"label": c.label, "action": c.action.to_dict(), "role": role, "certificate": _cert(cert)})
+                out.append({"label": c.label, "action": c.action.to_dict(), "role": role, "certificate": _cert(cert),
+                            "predicted_return": rec.predicted_returns.get(c.label)})
         elif self.mode in ("unshielded", "unshielded-fitted"):
             for i, c in enumerate(cands):
                 entry = {"label": c.label, "action": c.action.to_dict(),
