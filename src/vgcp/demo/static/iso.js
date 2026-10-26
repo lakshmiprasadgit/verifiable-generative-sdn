@@ -57,16 +57,33 @@
     const X = x + dx;
     return poly([[X, y + inset, z0], [X, y + dy - inset, z0], [X, y + dy - inset, z1], [X, y + inset, z1]], shade(color, LIGHT.right));
   }
-  function windows(x, y, dx, dy, h, glass) {
+  function monoWindows(x, y, dx, dy, h) {
     let s = "";
     for (let z = 0.2; z + 0.24 < h; z += 0.44) {
       for (let u = 0.12; u + 0.16 <= dx - 0.08; u += 0.32)
-        s += poly([[x + u, y + dy, z], [x + u + 0.16, y + dy, z], [x + u + 0.16, y + dy, z + 0.22], [x + u, y + dy, z + 0.22]], shade(glass, LIGHT.left));
+        s += poly([[x + u, y + dy, z], [x + u + 0.16, y + dy, z], [x + u + 0.16, y + dy, z + 0.22], [x + u, y + dy, z + 0.22]], MONO.glass);
       for (let u = 0.12; u + 0.16 <= dy - 0.08; u += 0.32)
-        s += poly([[x + dx, y + u, z], [x + dx, y + u + 0.16, z], [x + dx, y + u + 0.16, z + 0.22], [x + dx, y + u, z + 0.22]], shade(glass, LIGHT.right));
+        s += poly([[x + dx, y + u, z], [x + dx, y + u + 0.16, z], [x + dx, y + u + 0.16, z + 0.22], [x + dx, y + u, z + 0.22]], MONO.glass);
     }
     return s;
   }
+
+  // ---------------------------------------------------------------- background theme
+  // Monochrome and line-drawn (lavender on white), so that colour is left to what carries
+  // meaning: vehicles, the gate signal, utilization signs and overloaded roads.
+  const MONO = {top: "#FFFFFF", left: "#E8EAF8", right: "#CED2EF", line: "#A2A8DA", ink: "#4B529C",
+                ground: "#F6F7FD", groundLeft: "#DCDFF4", groundRight: "#BEC3E8", walk: "#FBFBFE",
+                road: "#D7DAF1", plaza: "#CACEEC", paint: "#FFFFFF", glass: "#D6D9F2", roof: "#DCDFF5", roofSide: "#C3C8EA"};
+  const OUT = `stroke="${MONO.line}" stroke-width="0.7" stroke-linejoin="round"`;
+  function mbox(x, y, z, dx, dy, dz, faces) {
+    const f = faces || {};
+    return poly([[x, y + dy, z], [x + dx, y + dy, z], [x + dx, y + dy, z + dz], [x, y + dy, z + dz]], f.left || MONO.left, OUT)
+      + poly([[x + dx, y, z], [x + dx, y + dy, z], [x + dx, y + dy, z + dz], [x + dx, y, z + dz]], f.right || MONO.right, OUT)
+      + poly([[x, y, z + dz], [x + dx, y, z + dz], [x + dx, y + dy, z + dz], [x, y + dy, z + dz]], f.top || MONO.top, OUT);
+  }
+  // Shapes that overlap (road segments, sidewalks, plazas) are outlined as one: draw them
+  // stroked, then fill them again unstroked, which leaves only the union's outer edge.
+  const outlined = (shapes) => shapes.map((r) => flat(...r.slice(0, 4), r[4], 0, OUT)).join("") + shapes.map((r) => flat(...r)).join("");
 
   // ---------------------------------------------------------------- road paint
   // Text lying flat in the ground plane: its x runs along world +x, its y along world
@@ -74,18 +91,18 @@
   function groundText(x, y, text, size, dy) {
     const [tx, ty] = P(x, y, 0);
     return `<text transform="matrix(${C30.toFixed(4)},0.5,${(-C30).toFixed(4)},0.5,${r1(tx)},${r1(ty)})" y="${dy}" text-anchor="middle" dominant-baseline="central"`
-      + ` style="fill:#F4F5F6;font-family:system-ui,sans-serif;font-size:${size}px;font-weight:800;letter-spacing:0.5px">${esc(text)}</text>`;
+      + ` style="fill:${MONO.ink};font-family:system-ui,sans-serif;font-size:${size}px;font-weight:800;letter-spacing:0.5px">${esc(text)}</text>`;
   }
   // A switch's name painted on its intersection, inside a box-junction outline.
   function paintNode(x, y, h, name, sub) {
     const m = h - 0.1;
     return poly([[x - m, y - m, 0], [x + m, y - m, 0], [x + m, y + m, 0], [x - m, y + m, 0]], "none",
-      'style="fill:none;stroke:#F4F5F6;stroke-width:1.1;stroke-opacity:0.8"')
+      'style="fill:none;stroke:${MONO.ink};stroke-width:1;stroke-opacity:0.7"')
       + groundText(x, y, name.toUpperCase(), 12.5, sub ? -2.5 : 0) + (sub ? groundText(x, y, sub, 6.2, 7.5) : "");
   }
 
   // ---------------------------------------------------------------- assets
-  const GLASS = "#F2E3A6", CABIN = "#C7DBEA";
+  const CABIN = "#C7DBEA";
   function vehicleBox(x, y, along, L, W) {
     const [dx, dy] = along === "x" ? [L, W] : [W, L];
     return [x - dx / 2, y - dy / 2, dx, dy];
@@ -113,27 +130,27 @@
     },
     tree(x, y, size) {
       const k = size || 1, [cx, cy] = P(x, y, 0.62 * k), r = 0.3 * k * S;
-      return box(x - 0.04, y - 0.04, 0, 0.08, 0.08, 0.4 * k, "#7A5230")
-        + `<circle cx="${r1(cx)}" cy="${r1(cy)}" r="${r1(r)}" fill="#4E9A43"/>`
-        + `<circle cx="${r1(cx - r * 0.28)}" cy="${r1(cy - r * 0.3)}" r="${r1(r * 0.58)}" fill="#6DB957"/>`;
+      return mbox(x - 0.04, y - 0.04, 0, 0.08, 0.08, 0.4 * k)
+        + `<circle cx="${r1(cx)}" cy="${r1(cy)}" r="${r1(r)}" fill="${MONO.left}" ${OUT}/>`
+        + `<circle cx="${r1(cx - r * 0.28)}" cy="${r1(cy - r * 0.3)}" r="${r1(r * 0.5)}" fill="${MONO.top}"/>`;
     },
-    house(x, y, dx, dy, h, wall, roof) {
+    house(x, y, dx, dy, h) {
       const ridge = 0.42, ym = y + dy / 2;
-      return box(x, y, 0, dx, dy, h, wall) + windows(x, y, dx, dy, h, GLASS)
-        + poly([[x, y, h], [x + dx, y, h], [x + dx, ym, h + ridge], [x, ym, h + ridge]], shade(roof, LIGHT.top))
-        + poly([[x, ym, h + ridge], [x + dx, ym, h + ridge], [x + dx, y + dy, h], [x, y + dy, h]], shade(roof, LIGHT.left))
-        + poly([[x + dx, y, h], [x + dx, y + dy, h], [x + dx, ym, h + ridge]], shade(wall, LIGHT.right));
+      return mbox(x, y, 0, dx, dy, h) + monoWindows(x, y, dx, dy, h)
+        + poly([[x, y, h], [x + dx, y, h], [x + dx, ym, h + ridge], [x, ym, h + ridge]], MONO.roof, OUT)
+        + poly([[x, ym, h + ridge], [x + dx, ym, h + ridge], [x + dx, y + dy, h], [x, y + dy, h]], MONO.roofSide, OUT)
+        + poly([[x + dx, y, h], [x + dx, y + dy, h], [x + dx, ym, h + ridge]], MONO.right, OUT);
     },
-    tower(x, y, dx, dy, h, wall) {
-      return box(x, y, 0, dx, dy, h, wall) + windows(x, y, dx, dy, h, GLASS)
-        + box(x + dx * 0.2, y + dy * 0.25, h, 0.18, 0.18, 0.1, "#D7DCE2") + box(x + dx * 0.6, y + dy * 0.5, h, 0.18, 0.18, 0.1, "#D7DCE2");
+    tower(x, y, dx, dy, h) {
+      return mbox(x, y, 0, dx, dy, h) + monoWindows(x, y, dx, dy, h)
+        + mbox(x + dx * 0.2, y + dy * 0.25, h, 0.18, 0.18, 0.1) + mbox(x + dx * 0.6, y + dy * 0.5, h, 0.18, 0.18, 0.1);
     },
     shop(x, y, dx, dy) {
-      return box(x, y, 0, dx, dy, 0.42, "#E7E1D4") + band(x, y, dx, dy, "x", 0.06, 0.3, 0.1, "#8FB8CF")
-        + box(x - 0.03, y - 0.03, 0.42, dx + 0.06, dy + 0.06, 0.05, "#B9B2A3") + box(x + dx * 0.3, y + dy * 0.3, 0.47, 0.22, 0.16, 0.08, "#F4F5F6");
+      return mbox(x, y, 0, dx, dy, 0.42) + poly([[x + 0.1, y + dy, 0.06], [x + dx - 0.1, y + dy, 0.06], [x + dx - 0.1, y + dy, 0.3], [x + 0.1, y + dy, 0.3]], MONO.glass, OUT)
+        + mbox(x - 0.03, y - 0.03, 0.42, dx + 0.06, dy + 0.06, 0.05) + mbox(x + dx * 0.3, y + dy * 0.3, 0.47, 0.22, 0.16, 0.08);
     },
     lamp(x, y) {
-      return line([x, y, 0], [x, y, 0.95], "#59616C", 1.6) + box(x - 0.05, y - 0.05, 0.95, 0.1, 0.1, 0.05, "#59616C");
+      return line([x, y, 0], [x, y, 0.95], MONO.line, 1.4) + mbox(x - 0.05, y - 0.05, 0.95, 0.1, 0.1, 0.05);
     },
     trafficLight(x, y, state) {
       const on = {green: "#33C76A", amber: "#F5B83D", red: "#E5483C"}, dim = "#4A4F57";
@@ -141,7 +158,7 @@
         const [cx, cy] = P(x + 0.06, y, z), lit = state === colour;
         return `<circle cx="${r1(cx)}" cy="${r1(cy)}" r="2.6" fill="${lit ? on[colour] : dim}"${lit ? ` stroke="${on[colour]}" stroke-opacity=".45" stroke-width="3"` : ""}/>`;
       };
-      return line([x, y, 0], [x, y, 0.8], "#3B4048", 2) + box(x - 0.06, y - 0.06, 0.8, 0.12, 0.12, 0.44, "#2B2F35")
+      return line([x, y, 0], [x, y, 0.8], MONO.ink, 2) + box(x - 0.06, y - 0.06, 0.8, 0.12, 0.12, 0.44, "#353A66")
         + lamp(1.15, "red") + lamp(1.02, "amber") + lamp(0.89, "green");
     },
     // Overhead sign across a road (as in the reference): two poles, a bar, a board.
@@ -150,13 +167,13 @@
       let s = "";
       if (along === "x") {
         const a = [cx, cy - off], b = [cx, cy + off];
-        s += line([...a, 0], [...a, z], "#7D858F", 1.6) + line([...b, 0], [...b, z], "#7D858F", 1.6) + line([...a, z], [...b, z], "#7D858F", 1.6);
+        s += line([...a, 0], [...a, z], MONO.line, 1.4) + line([...b, 0], [...b, z], MONO.line, 1.4) + line([...a, z], [...b, z], MONO.line, 1.4);
         s += poly([[cx, cy + 0.48, z - 0.34], [cx, cy - 0.48, z - 0.34], [cx, cy - 0.48, z + 0.02], [cx, cy + 0.48, z + 0.02]], boardColor, 'stroke="#FFFFFF" stroke-width="0.8"');
         const [tx, ty] = P(cx, cy + 0.42, z - 0.21);
         s += `<text transform="matrix(${C30.toFixed(4)},-0.5,0,1,${r1(tx)},${r1(ty)})" font-size="7.5" font-weight="700" style="fill:#FFFFFF">${esc(text)}</text>`;
       } else {
         const a = [cx - off, cy], b = [cx + off, cy];
-        s += line([...a, 0], [...a, z], "#7D858F", 1.6) + line([...b, 0], [...b, z], "#7D858F", 1.6) + line([...a, z], [...b, z], "#7D858F", 1.6);
+        s += line([...a, 0], [...a, z], MONO.line, 1.4) + line([...b, 0], [...b, z], MONO.line, 1.4) + line([...a, z], [...b, z], MONO.line, 1.4);
         s += poly([[cx - 0.48, cy, z - 0.34], [cx + 0.48, cy, z - 0.34], [cx + 0.48, cy, z + 0.02], [cx - 0.48, cy, z + 0.02]], boardColor, 'stroke="#FFFFFF" stroke-width="0.8"');
         const [tx, ty] = P(cx - 0.42, cy, z - 0.21);
         s += `<text transform="matrix(${C30.toFixed(4)},0.5,0,1,${r1(tx)},${r1(ty)})" font-size="7.5" font-weight="700" style="fill:#FFFFFF">${esc(text)}</text>`;
@@ -231,24 +248,26 @@
     const add = (depth, svgText) => objs.push([depth, svgText]);
 
     // diorama slab: grass on top, soil sides
-    ground.push(box(B.x0, B.y0, -0.35, B.x1 - B.x0, B.y1 - B.y0, 0.35, "#A6CC7B", {top: "#A6CC7B", left: "#8C6B4F", right: "#6F5440"}));
+    ground.push(mbox(B.x0, B.y0, -0.35, B.x1 - B.x0, B.y1 - B.y0, 0.35, {top: MONO.ground, left: MONO.groundLeft, right: MONO.groundRight}));
     // sidewalks, then asphalt, per link segment; squares at bends and plazas at nodes
     const segs = [];
     for (const [lid, k] of Object.entries(links))
       for (let i = 0; i < k.poly.length - 1; i++) segs.push([lid, k.poly[i], k.poly[i + 1], k.w]);
-    for (const [, a, b, w] of segs) { const [x, y, dx, dy] = segRect(a, b, w + 0.44); ground.push(flat(x - (a[1] === b[1] ? 0 : 0), y, dx, dy, "#E3E6E9")); }
-    for (const n of Object.keys(node)) { const [x, y] = node[n], h = half[n] + 0.22; ground.push(flat(x - h, y - h, 2 * h, 2 * h, "#E3E6E9")); }
-    for (const k of Object.values(links)) for (const p of k.poly.slice(1, -1)) { const h = k.w / 2 + 0.22; ground.push(flat(p[0] - h, p[1] - h, 2 * h, 2 * h, "#E3E6E9")); }
+    const walks = [], asphalt = [];
+    for (const [, a, b, w] of segs) walks.push([...segRect(a, b, w + 0.44), MONO.walk]);
+    for (const n of Object.keys(node)) { const [x, y] = node[n], h = half[n] + 0.22; walks.push([x - h, y - h, 2 * h, 2 * h, MONO.walk]); }
+    for (const k of Object.values(links)) for (const p of k.poly.slice(1, -1)) { const h = k.w / 2 + 0.22; walks.push([p[0] - h, p[1] - h, 2 * h, 2 * h, MONO.walk]); }
+    for (const [, a, b, w] of segs) asphalt.push([...segRect(a, b, w), MONO.road]);
+    for (const k of Object.values(links)) for (const p of k.poly.slice(1, -1)) asphalt.push([p[0] - k.w / 2, p[1] - k.w / 2, k.w, k.w, MONO.road]);
+    ground.push(outlined(walks), outlined(asphalt));
     for (const [lid, a, b, w] of segs) {
       const [x, y, dx, dy] = segRect(a, b, w);
-      ground.push(flat(x, y, dx, dy, "#4F555E"));
       const u = util[lid];
       if (power[lid] === false) ground.push(flat(x, y, dx, dy, "#9AA1AB", 0, 'fill-opacity="0.55"'));
       else if (isNum(u) && u > 1.0) ground.push(flat(x, y, dx, dy, "#E5483C", 0, 'fill-opacity="0.45"'));
       else if (isNum(u) && u > limit) ground.push(flat(x, y, dx, dy, "#F5A524", 0, 'fill-opacity="0.4"'));
     }
-    for (const k of Object.values(links)) for (const p of k.poly.slice(1, -1)) ground.push(flat(p[0] - k.w / 2, p[1] - k.w / 2, k.w, k.w, "#4F555E"));
-    for (const n of Object.keys(node)) { const [x, y] = node[n], h = half[n]; ground.push(flat(x - h, y - h, 2 * h, 2 * h, "#4A5059")); }
+    for (const n of Object.keys(node)) { const [x, y] = node[n], h = half[n]; ground.push(flat(x - h, y - h, 2 * h, 2 * h, MONO.plaza, 0, OUT)); }
 
     // lane dashes and zebra crossings
     for (const [, a, b, w] of segs) {
@@ -256,14 +275,14 @@
       const startPad = (node_at(a) ? half[node_at(a)] : w / 2) + 0.35, endPad = (node_at(b) ? half[node_at(b)] : w / 2) + 0.35;
       for (let s = startPad; s + 0.3 < len - endPad; s += 0.6) {
         const c = horiz ? [a[0] + dir * (s + 0.15), a[1]] : [a[0], a[1] + dir * (s + 0.15)];
-        marks.push(horiz ? flat(c[0] - 0.15, c[1] - 0.025, 0.3, 0.05, "#F1F3F5") : flat(c[0] - 0.025, c[1] - 0.15, 0.05, 0.3, "#F1F3F5"));
+        marks.push(horiz ? flat(c[0] - 0.15, c[1] - 0.025, 0.3, 0.05, MONO.paint) : flat(c[0] - 0.025, c[1] - 0.15, 0.05, 0.3, MONO.paint));
       }
       for (const [end, sgn] of [[a, dir], [b, -dir]]) {
         const n = node_at(end); if (!n) continue;
         const from = half[n] + 0.04;
         for (let v = -w / 2 + 0.06; v + 0.06 <= w / 2; v += 0.13)
-          marks.push(horiz ? flat(end[0] + sgn * from + (sgn > 0 ? 0 : -0.26), end[1] + v, 0.26, 0.065, "#F4F5F6")
-                           : flat(end[0] + v, end[1] + sgn * from + (sgn > 0 ? 0 : -0.26), 0.065, 0.26, "#F4F5F6"));
+          marks.push(horiz ? flat(end[0] + sgn * from + (sgn > 0 ? 0 : -0.26), end[1] + v, 0.26, 0.065, MONO.paint)
+                           : flat(end[0] + v, end[1] + sgn * from + (sgn > 0 ? 0 : -0.26), 0.065, 0.26, MONO.paint));
       }
     }
     function node_at(p) { return Object.keys(node).find((n) => node[n][0] === p[0] && node[n][1] === p[1]); }
@@ -278,8 +297,8 @@
       // tall objects hide what lies behind them on screen, so towers only stand in the
       // back ring (behind every road); elsewhere the city stays low
       const back = cx < 0 || cy < 0;
-      if (h < 22) add(cx + cy, Asset.house(x, y, 0.6, 0.6, back ? 0.58 : 0.46, "#D2574C", "#7E2F2B"));
-      else if (h < 36 && back) add(cx + cy, Asset.tower(x, y, 0.6, 0.6, 1.3 + (h % 3) * 0.25, "#6F86A6"));
+      if (h < 22) add(cx + cy, Asset.house(x, y, 0.6, 0.6, back ? 0.58 : 0.46));
+      else if (h < 36 && back) add(cx + cy, Asset.tower(x, y, 0.6, 0.6, 1.3 + (h % 3) * 0.25));
       else if (h < 48) add(cx + cy, Asset.shop(x, y, 0.6, 0.55));
       else if (h < 90) add(cx + cy, Asset.tree(cx, cy, 0.85));
       else add(cx + cy, Asset.lamp(cx, cy));
@@ -358,7 +377,7 @@
     for (const pid of Object.keys(T.paths)) { // beside the path's middle switch, off the road
       const ns = T.paths[pid].nodes, m = ns[Math.floor(ns.length / 2)], [x, y] = node[m], h = half[m];
       const [tx, ty] = P(x - h - 0.9, y - h - 0.25, 0);
-      labels.push(`<text x="${r1(tx)}" y="${r1(ty)}" text-anchor="middle" font-size="11" font-weight="700" style="fill:#FFFFFF;stroke:#1F5FB5;stroke-width:3.5px;paint-order:stroke">Path ${esc(pid)}</text>`);
+      labels.push(`<text x="${r1(tx)}" y="${r1(ty)}" text-anchor="middle" font-size="11" font-weight="700" style="fill:#FFFFFF;stroke:${MONO.ink};stroke-width:3.5px;paint-order:stroke">Path ${esc(pid)}</text>`);
     }
 
     objs.sort((a, b) => a[0] - b[0]);
@@ -387,14 +406,14 @@
     let s = "";
     for (const [y, cap] of [[0, lo], [1.6, hi]]) {
       const w = 0.4 + 0.6 * cap / hi;
-      s += flat(0, y - w / 2 - 0.2, 2, w + 0.4, "#E3E6E9") + flat(0, y - w / 2, 2, w, "#4F555E");
-      for (let x = 0.2; x < 1.9; x += 0.6) s += flat(x, y - 0.025, 0.3, 0.05, "#F1F3F5");
+      s += flat(0, y - w / 2 - 0.2, 2, w + 0.4, MONO.walk, 0, OUT) + flat(0, y - w / 2, 2, w, MONO.road, 0, OUT);
+      for (let x = 0.2; x < 1.9; x += 0.6) s += flat(x, y - 0.025, 0.3, 0.05, MONO.paint);
     }
     return [s, lo, hi];
   }
   function plaza() {
-    let s = flat(-0.7, -0.7, 1.4, 1.4, "#E3E6E9") + flat(-0.5, -0.5, 1.0, 1.0, "#4A5059");
-    for (let v = -0.42; v < 0.4; v += 0.13) s += flat(0.52, v, 0.24, 0.065, "#F4F5F6") + flat(v, 0.52, 0.065, 0.24, "#F4F5F6");
+    let s = flat(-0.7, -0.7, 1.4, 1.4, MONO.walk, 0, OUT) + flat(-0.5, -0.5, 1.0, 1.0, MONO.plaza, 0, OUT);
+    for (let v = -0.42; v < 0.4; v += 0.13) s += flat(0.52, v, 0.24, 0.065, MONO.paint) + flat(v, 0.52, 0.065, 0.24, MONO.paint);
     return s + paintNode(0, 0, 0.5, "s1", "GATE");
   }
   function legend(T, limit, light) {
