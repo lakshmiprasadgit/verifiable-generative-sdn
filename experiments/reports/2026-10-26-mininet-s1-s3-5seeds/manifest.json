@@ -1,0 +1,55 @@
+{
+  "command": [
+    ".venv/bin/python",
+    "-m",
+    "vgcp.experiments",
+    "--backend",
+    "mininet",
+    "--scenarios",
+    "experiments/scenarios/s1_steady.yaml",
+    "experiments/scenarios/s2_background_on_embb_path.yaml",
+    "experiments/scenarios/s3_background_on_urllc_path.yaml",
+    "--seeds",
+    "1-5",
+    "--out",
+    "experiments/results/mininet-20261026T134135Z/campaign"
+  ],
+  "started_utc": "2026-10-26T13:45:37.489023+00:00",
+  "git_commit": "88d5a849efab1014252b6fdc098d1970e59d2b48",
+  "git_dirty": false,
+  "python": "3.12.3",
+  "backend": "mininet (measured)",
+  "config_hash": "8b27123132897fe6355f0814d9f8afd9b808f50a18cc8f2501e906e14aca31c6",
+  "fallback_policy": "capacity_aware",
+  "latency_safety_factor": 1.5,
+  "config_overrides": {},
+  "scenarios": {
+    "s1_steady": {
+      "file": "experiments/scenarios/s1_steady.yaml",
+      "digest": "bf29de53c25ab5957445d3048606221c2a50c47c34ca682148088fdd029787e0"
+    },
+    "s2_background_on_embb_path": {
+      "file": "experiments/scenarios/s2_background_on_embb_path.yaml",
+      "digest": "fbd3393d15d53484f48d58f24bb264e874f85f23f3b388aab214c88943cac635"
+    },
+    "s3_background_on_urllc_path": {
+      "file": "experiments/scenarios/s3_background_on_urllc_path.yaml",
+      "digest": "65f21e179aeb222559fb9d48283893968217b38b8a19c811c23cfcd571a550ce"
+    }
+  },
+  "modes": [
+    "shielded",
+    "shielded-utility",
+    "unshielded",
+    "unshielded-fitted",
+    "fallback-only"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "n_random": 4
+}

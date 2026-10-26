@@ -1,0 +1,70 @@
+{
+ "created_utc": "2026-10-26T16:36:32.304916+00:00",
+ "git_commit": "88d5a849efab1014252b6fdc098d1970e59d2b48",
+ "config_hash": "8b27123132897fe6355f0814d9f8afd9b808f50a18cc8f2501e906e14aca31c6",
+ "training": {
+  "campaign": "experiments/results/mininet-20261026T134135Z/campaign",
+  "seeds": [
+   1,
+   2,
+   3
+  ],
+  "scenarios": "all"
+ },
+ "fit": {
+  "quantile": 0.99,
+  "n_points": 8100,
+  "proposed_latency_safety_factor": 2.271853228588017,
+  "train_coverage": 0.99,
+  "ratio_by_slice": {
+   "embb": {
+    "n": 2700,
+    "median": 0.9337900088262832,
+    "p90": 1.0607518918897818,
+    "p99": 1.6273487962400832,
+    "max": 3.1777189720249073
+   },
+   "mmtc": {
+    "n": 2700,
+    "median": 0.979545641843833,
+    "p90": 1.1519570306665323,
+    "p99": 1.504579760573655,
+    "max": 2.8367637214159154
+   },
+   "urllc": {
+    "n": 2700,
+    "median": 0.9576908143852373,
+    "p90": 1.5061894791895691,
+    "p99": 3.7278703415613315,
+    "max": 17.134203912117414
+   }
+  },
+  "configured_latency_safety_factor": 1.5,
+  "train_coverage_configured": 0.9579012345679012
+ },
+ "held_out": {
+  "experiments/results/mininet-20261026T134135Z/campaign": {
+   "backend": "mininet (measured)",
+   "n_points": 5399,
+   "coverage_proposed": 0.9853676606779033,
+   "coverage_configured": 0.9525838118170031,
+   "by_scenario": {
+    "s1_steady": {
+     "n": 1800,
+     "coverage_proposed": 0.9811111111111112,
+     "coverage_configured": 0.935
+    },
+    "s2_background_on_embb_path": {
+     "n": 1799,
+     "coverage_proposed": 0.990550305725403,
+     "coverage_configured": 0.9744302390216787
+    },
+    "s3_background_on_urllc_path": {
+     "n": 1800,
+     "coverage_proposed": 0.9844444444444445,
+     "coverage_configured": 0.9483333333333334
+    }
+   }
+  }
+ }
+}

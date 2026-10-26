@@ -1,0 +1,359 @@
+{
+  "started_utc": "2026-10-26T13:29:27.804732+00:00",
+  "git_commit": "88d5a849efab1014252b6fdc098d1970e59d2b48",
+  "warmup_s": 2.0,
+  "window_s": 4.0,
+  "frame_overhead_bytes": 42,
+  "rows": [
+    {
+      "budget_mbps": 1.0,
+      "payload_bytes": 22,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        64
+      ],
+      "offered_mbps": 1.50117460734421,
+      "admitted_mbps": 0.9999499692631859,
+      "admitted_pps": 1953.02728371716,
+      "ratio_frames": 0.9999499692631859,
+      "ratio_ip": 0.781210913486864,
+      "ratio_payload": 0.3437328019342201,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 5.0,
+      "payload_bytes": 22,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        64
+      ],
+      "offered_mbps": 7.50008008733955,
+      "admitted_mbps": 5.0004700311120605,
+      "admitted_pps": 9766.543029515744,
+      "ratio_frames": 1.0000940062224122,
+      "ratio_ip": 0.7813234423612594,
+      "ratio_payload": 0.34378231463895415,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 20.0,
+      "payload_bytes": 22,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        64
+      ],
+      "offered_mbps": 30.007915483021566,
+      "admitted_mbps": 19.999480861254288,
+      "admitted_pps": 39061.48605713728,
+      "ratio_frames": 0.9999740430627144,
+      "ratio_ip": 0.7812297211427456,
+      "ratio_payload": 0.34374107730280806,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 1.0,
+      "payload_bytes": 58,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        100
+      ],
+      "offered_mbps": 1.5001870348735458,
+      "admitted_mbps": 1.000006317955712,
+      "admitted_pps": 1250.00789744464,
+      "ratio_frames": 1.000006317955712,
+      "ratio_ip": 0.8600054334419123,
+      "ratio_payload": 0.580003664414313,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 5.0,
+      "payload_bytes": 58,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        100
+      ],
+      "offered_mbps": 7.49937866401555,
+      "admitted_mbps": 4.999644938505053,
+      "admitted_pps": 6249.556173131317,
+      "ratio_frames": 0.9999289877010107,
+      "ratio_ip": 0.8599389294228692,
+      "ratio_payload": 0.5799588128665862,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 20.0,
+      "payload_bytes": 58,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        100
+      ],
+      "offered_mbps": 30.002926935814944,
+      "admitted_mbps": 19.99745431594848,
+      "admitted_pps": 24996.817894935604,
+      "ratio_frames": 0.9998727157974241,
+      "ratio_ip": 0.8598905355857847,
+      "ratio_payload": 0.579926175162506,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 1.0,
+      "payload_bytes": 1400,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1442
+      ],
+      "offered_mbps": 1.5003481450720841,
+      "admitted_mbps": 0.9985252160036054,
+      "admitted_pps": 86.55731761473695,
+      "ratio_frames": 0.9985252160036054,
+      "ratio_ip": 0.9888307964307549,
+      "ratio_payload": 0.9694419572850538,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 5.0,
+      "payload_bytes": 1400,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1442
+      ],
+      "offered_mbps": 7.49949508536228,
+      "admitted_mbps": 4.996250650725997,
+      "admitted_pps": 433.1007845636267,
+      "ratio_frames": 0.9992501301451995,
+      "ratio_ip": 0.9895486725709743,
+      "ratio_payload": 0.9701457574225237,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 20.0,
+      "payload_bytes": 1400,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1442
+      ],
+      "offered_mbps": 30.00081066052998,
+      "admitted_mbps": 20.002246971107617,
+      "admitted_pps": 1733.8979690627268,
+      "ratio_frames": 1.000112348555381,
+      "ratio_ip": 0.9904025199286297,
+      "ratio_payload": 0.9709828626751269,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 50.0,
+      "payload_bytes": 1400,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1442
+      ],
+      "offered_mbps": 75.01048138415862,
+      "admitted_mbps": 50.00101405849837,
+      "admitted_pps": 4334.345878857348,
+      "ratio_frames": 1.0000202811699674,
+      "ratio_ip": 0.9903113464013269,
+      "ratio_payload": 0.9708934768640459,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 70.0,
+      "payload_bytes": 1400,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1442
+      ],
+      "offered_mbps": 104.99428315793597,
+      "admitted_mbps": 70.00728031820348,
+      "admitted_pps": 6068.592260593227,
+      "ratio_frames": 1.000104004545764,
+      "ratio_ip": 0.990394256928815,
+      "ratio_payload": 0.9709747616949165,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 1.0,
+      "payload_bytes": 1472,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514
+      ],
+      "offered_mbps": 1.4999560872252773,
+      "admitted_mbps": 0.9972826314705696,
+      "admitted_pps": 82.33839427597174,
+      "ratio_frames": 0.9972826314705696,
+      "ratio_ip": 0.9880607313116607,
+      "ratio_payload": 0.9696169309938432,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 5.0,
+      "payload_bytes": 1472,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514
+      ],
+      "offered_mbps": 7.496757165977429,
+      "admitted_mbps": 4.998733459650302,
+      "admitted_pps": 412.7091693898863,
+      "ratio_frames": 0.9997466919300605,
+      "ratio_ip": 0.9905020065357271,
+      "ratio_payload": 0.9720126357470601,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 20.0,
+      "payload_bytes": 1472,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514
+      ],
+      "offered_mbps": 30.00376197811384,
+      "admitted_mbps": 20.002507985409228,
+      "admitted_pps": 1651.462019931409,
+      "ratio_frames": 1.0001253992704613,
+      "ratio_ip": 0.9908772119588456,
+      "ratio_payload": 0.9723808373356138,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 50.0,
+      "payload_bytes": 1472,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514
+      ],
+      "offered_mbps": 74.97912090925445,
+      "admitted_mbps": 49.9896644800256,
+      "admitted_pps": 4127.2840554842805,
+      "ratio_frames": 0.9997932896005121,
+      "ratio_ip": 0.9905481733162272,
+      "ratio_payload": 0.9720579407476577,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 70.0,
+      "payload_bytes": 1472,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514
+      ],
+      "offered_mbps": 104.99675362850653,
+      "admitted_mbps": 69.99783575233769,
+      "admitted_pps": 5779.213651943336,
+      "ratio_frames": 0.9999690821762528,
+      "ratio_ip": 0.9907223403331434,
+      "ratio_payload": 0.9722288566469247,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 1.0,
+      "payload_bytes": 1500,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514,
+        62
+      ],
+      "offered_mbps": 1.4994384992353706,
+      "admitted_mbps": 0.9977559594644939,
+      "admitted_pps": 187.7102684082843,
+      "ratio_frames": 0.9977559594644939,
+      "ratio_ip": 0.9767324094027661,
+      "ratio_payload": 0.9496408243634142,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 5.0,
+      "payload_bytes": 1500,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514,
+        62
+      ],
+      "offered_mbps": 7.500885290375418,
+      "admitted_mbps": 5.000306259505688,
+      "admitted_pps": 948.5172790651867,
+      "ratio_frames": 1.0000612519011376,
+      "ratio_ip": 0.9788144648500774,
+      "ratio_payload": 0.9518349478754482,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 20.0,
+      "payload_bytes": 1500,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514,
+        62
+      ],
+      "offered_mbps": 30.003982057205913,
+      "admitted_mbps": 20.00217656380487,
+      "admitted_pps": 3890.961143767446,
+      "ratio_frames": 1.0001088281902435,
+      "ratio_ip": 0.9783194457851458,
+      "ratio_payload": 0.9518802298765008,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 50.0,
+      "payload_bytes": 1500,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514,
+        62
+      ],
+      "offered_mbps": 74.99894030061361,
+      "admitted_mbps": 49.991695951301665,
+      "admitted_pps": 7527.971470613033,
+      "ratio_frames": 0.9998339190260332,
+      "ratio_ip": 0.9829712629318601,
+      "ratio_payload": 0.9516185777532042,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 70.0,
+      "payload_bytes": 1500,
+      "burst_fraction": 0.1,
+      "frames_per_datagram": [
+        1514,
+        62
+      ],
+      "offered_mbps": 104.9965841572535,
+      "admitted_mbps": 69.99712888638516,
+      "admitted_pps": 12944.950573108063,
+      "ratio_frames": 0.9999589840912165,
+      "ratio_ip": 0.9792470631742436,
+      "ratio_payload": 0.9517376117619447,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 50.0,
+      "payload_bytes": 1472,
+      "burst_fraction": 0.01,
+      "frames_per_datagram": [
+        1514
+      ],
+      "offered_mbps": 75.00087435546308,
+      "admitted_mbps": 49.977280965024114,
+      "admitted_pps": 4126.261638459719,
+      "ratio_frames": 0.9995456193004822,
+      "ratio_ip": 0.9903027932303325,
+      "ratio_payload": 0.9718171410900331,
+      "offered_enough": true
+    },
+    {
+      "budget_mbps": 50.0,
+      "payload_bytes": 1472,
+      "burst_fraction": 1.0,
+      "frames_per_datagram": [
+        1514
+      ],
+      "offered_mbps": 74.99986439805798,
+      "admitted_mbps": 50.0079714996403,
+      "admitted_pps": 4128.795533325652,
+      "ratio_frames": 1.000159429992806,
+      "ratio_ip": 0.9909109279981565,
+      "ratio_payload": 0.9724139240088577,
+      "offered_enough": true
+    }
+  ]
+}

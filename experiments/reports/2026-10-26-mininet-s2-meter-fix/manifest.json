@@ -1,0 +1,45 @@
+{
+  "command": [
+    ".venv/bin/python",
+    "-m",
+    "vgcp.experiments",
+    "--backend",
+    "mininet",
+    "--scenarios",
+    "experiments/scenarios/s2_background_on_embb_path.yaml",
+    "--seeds",
+    "1-5",
+    "--out",
+    "experiments/results/mininet-20261026T173343Z/campaign"
+  ],
+  "started_utc": "2026-10-26T17:37:44.588786+00:00",
+  "git_commit": "c831a002d47b168319f301db9e4878769e7fe135",
+  "git_dirty": false,
+  "python": "3.12.3",
+  "backend": "mininet (measured)",
+  "config_hash": "776327bc21940d92728047b5c8c1c79c6ba0325ce6c55a1cda275ee93b47103a",
+  "fallback_policy": "capacity_aware",
+  "latency_safety_factor": 1.5,
+  "config_overrides": {},
+  "scenarios": {
+    "s2_background_on_embb_path": {
+      "file": "experiments/scenarios/s2_background_on_embb_path.yaml",
+      "digest": "fbd3393d15d53484f48d58f24bb264e874f85f23f3b388aab214c88943cac635"
+    }
+  },
+  "modes": [
+    "shielded",
+    "shielded-utility",
+    "unshielded",
+    "unshielded-fitted",
+    "fallback-only"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "n_random": 4
+}

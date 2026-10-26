@@ -1,13 +1,16 @@
 # Implementation status
 
-As of 2026-10-22. A research prototype: not formally verified, and nothing here is a
+As of 2026-10-26. A research prototype: not formally verified, and nothing here is a
 claim about the safety of a real network.
 
 ## Where we are
 
-**Every Stage 1 milestone has its implementation in place, and the emulated
-network's telemetry is validated (s2, 2026-10-22). What remains is team decisions
-(meter, probes, units) and the full Mininet campaign.**
+**Every Stage 1 milestone has its implementation in place, and every team decision
+is taken and implemented (2026-10-26, DECISIONS.md): frame-rate units, p99 of 100
+probes, the meter's overshoot (cause found, burst reduced, remainder modelled), and
+the latency factor (Mininet fit failed the held-out rule, so 1.5 stays). The full
+s1-s3 Mininet campaign ran on 5 seeds. Open: unexplained URLLC latency spikes on
+Mininet, and Assumption 3.**
 
 * **Simulation:** the closed loop runs end to end, with first-certified and Eq 42
   selection, a calibration tool, and campaigns on main and held-out seeds.
@@ -19,10 +22,10 @@ network's telemetry is validated (s2, 2026-10-22). What remains is team decision
 | Milestone | Scope | Status |
 |---|---|---|
 | 1 | state/action schemas, constraints, STL robustness, verification shield | **done**; all audit findings addressed |
-| 2 | closed loop, network backends, telemetry, experiments | **done**: telemetry and metric fixes validated on Mininet (integration 10/10 twice, s2 re-runs 2026-10-22). **Open:** the meter's ~1.10× overshoot (team decision) |
-| 3 | traffic, telemetry, nominal-model calibration | **done (method and simulator evidence)**: calibration tool, held-out evaluation, provisional Mininet fit. The configured factor is deliberately unchanged. **Open:** fit and adopt on fixed Mininet data |
+| 2 | closed loop, network backends, telemetry, experiments | **done**: telemetry fixes validated (integration 11/11, twice per run); meter overshoot fixed and modelled, validated on s2 (reservation-limit slots 19.8 → 4.0 per shielded trial, 2026-10-26). **Open:** URLLC p99 spikes up to 19 ms under campaign load (not on an idle path, not the counter reads) |
+| 3 | traffic, telemetry, nominal-model calibration | **done (method and simulator evidence)**: calibration tool, held-out evaluation, provisional Mininet fit. The configured factor is deliberately unchanged. Mininet fit on seeds 1-3 (k = 2.27) covered 98.5 % of held-out slots (< 99 %), so k = 1.5 stays; the fit is driven by the unexplained URLLC spikes |
 | 4 | fallback, candidates, selection, closed loop | **done**: π₀(s), heuristic candidates, enforced closed loop, Eq 42 utility selection (`shielded-utility`, D20). **Open:** Assumption 3 (recursive feasibility) is still not shown |
-| 5 | experiments, metrics, reports | **done for simulation and Mininet s2**: 2026-10-22 campaigns in `experiments/reports/`; dashboard. **Open:** full s1-s3 Mininet campaign |
+| 5 | experiments, metrics, reports | **done**: simulation (2026-10-22) and Mininet s1-s3 × 5 seeds (2026-10-26) in `experiments/reports/`; meter diagnostics; dashboard |
 
 ## Done in Milestone 2 (2026-10-21)
 
@@ -184,17 +187,16 @@ is kept.
 
 ## Next engineering objective
 
-The telemetry is validated on Mininet. Next:
-1. **Meter overshoot** (team decision, DECISIONS 2026-10-22). Recommended: a short
-   root diagnostic sweeping fixed meter rates to find the cause, then model the
-   overshoot in the constraint and T̂ (option b) rather than hiding it.
-2. **Probes per slot:** latency is the max of 8 pings, and isolated spikes now
-   dominate the shielded modes' violations. Decide a probe count (e.g. 50) or a
-   statistic.
-3. **Full Mininet campaign** (s1-s3, about 52 minutes):
-   `sudo scripts/mininet_run.sh --campaign`. Then fit the latency factor on Mininet
-   seeds and check it on held-out seeds.
-4. **Rate units** (payload or frames) and eMBB's packet size, which fragments.
+The team decisions are implemented (DECISIONS 2026-10-26). Next:
+1. **URLLC latency spikes on Mininet.** Slot p99 up to 19 ms on path A (0.2 ms
+   propagation) in s1 and s3, in every controller, clustered by run. An idle path
+   with the same probes and counter reads stays below 1 ms, so the cause needs the
+   campaign's traffic or host load. Suggested diagnostic: idle-path probes with each
+   slice's iperf3 traffic switched on one at a time. Until resolved, Mininet latency
+   violations on lightly loaded paths are not attributed to the controller.
+2. **Re-run s1 and s3 on Mininet** at the current commit (meter fix), and repeat the
+   latency-factor fit once the spikes are explained.
+3. **Assumption 3** (recursive feasibility of π₀) remains a research gap.
 
 ## Known limitations
 
@@ -211,6 +213,7 @@ The telemetry is validated on Mininet. Next:
   until the root re-run.
 * Background load is held constant over the horizon and is under-measured during
   overload (post-drop counters).
+* Mininet latency on lightly loaded paths has unexplained spikes (above).
 * No mMTC loss intent is active (the model does not predict loss).
 * Thresholds in `configs/` are illustrative, not 6G standards.
 * `research/problem_formulation_corrected.pdf` stays untracked (rights unconfirmed).

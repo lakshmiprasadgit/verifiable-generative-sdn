@@ -19,15 +19,15 @@ This README has two audiences: **[Part A](#part-a---for-team-members)** for peop
 on the team, **[Part B](#part-b---for-ai-agents-and-automation)** for coding agents
 and automation. Both share the status table and the quick start.
 
-## Status (2026-10-22)
+## Status (2026-10-26)
 
 | Milestone | Content | Status |
 |---|---|---|
 | 1 | state/action schemas, hard constraints, STL robustness, verification shield | **done** - all audit findings addressed; certificates are enforced by `CertifiedApplier` |
-| 2 | closed loop, simulated and Mininet backends, experiments | **done** - loop, simulator, Mininet backend (integration 10/10 twice); telemetry fixes validated on Mininet (s2, 2026-10-22). **Open:** the meter's ~1.10× overshoot (team decision) |
-| 3 | traffic, telemetry, nominal-model calibration | **done (method and simulator evidence)** - calibration tool with held-out evaluation. **Open:** fit on fixed Mininet data; the configured factor is unchanged until then |
+| 2 | closed loop, simulated and Mininet backends, experiments | **done** - loop, simulator, Mininet backend (integration 11/11 twice per run); telemetry fixes validated; meter overshoot found (bucket refill on each modification), fixed and modelled (s2 reservation-limit slots 19.8 → 4.0). **Open:** unexplained URLLC latency spikes under campaign load |
+| 3 | traffic, telemetry, nominal-model calibration | **done** - calibration tool with held-out evaluation; Mininet fit (k = 2.27) missed the 99 % held-out rule (98.5 %), so k = 1.5 stays |
 | 4 | fallback, heuristic candidates, selection, closed loop | **done** - π₀(s), heuristic candidates, enforced loop, Eq 42 utility selection (`shielded-utility`). **Open:** recursive feasibility (Assumption 3) is not shown |
-| 5 | experiments, metrics, reports | **done for simulation, s2 on Mininet** - 2026-10-22 campaigns (5 controllers, main and held-out seeds, calibration ablation; Mininet s2 after the fixes) in `experiments/reports/`; dashboard. **Open:** full s1-s3 Mininet campaign |
+| 5 | experiments, metrics, reports | **done** - simulation campaigns (2026-10-22) and Mininet s1-s3 × 5 seeds plus meter diagnostics (2026-10-26) in `experiments/reports/`; dashboard |
 
 Details and evidence: [docs/STATUS.md](docs/STATUS.md). Work happens on the branch
 `feat/m2-mininet-backend`, which is not yet merged into `main`.
@@ -291,16 +291,16 @@ Read this section completely before changing anything.
   * **Fixed and confirmed on Mininet** (`dde4fe4`, `mininet-20261022T174731Z`):
     stale rule counters. OVS refreshes them every 500 ms; snapshots now call
     `ovs-appctl revalidator/wait` first.
-  * **Still open:**
-    * the meter passes ~1.10× the budget at 50-70 Mb/s (cause unknown), which
-      alone explains s2's reservation-limit slots on Mininet (team decision,
-      DECISIONS 2026-10-22);
-    * scenarios give payload rates while counters count frames;
-    * eMBB's 1500-byte payload fragments;
-    * latency is the max of 8 probes.
+  * **Decided and done (2026-10-26, DECISIONS.md):** all rates are Ethernet frame
+    rates (eMBB frames 1514 bytes, unfragmented); latency is the p99 of 100 probes;
+    meters use a 0.01 s burst and the remaining 1 % overshoot is modelled
+    (`network.control.meter_overshoot`).
+  * **Still open:** URLLC p99 spikes up to 19 ms on lightly loaded paths during
+    campaigns (not on an idle path, not caused by the counter reads).
 * **Research gaps:**
-  * The latency factor is calibrated on the simulator only; the configured 1.5 is
-    kept.
+  * The latency factor stays 1.5: neither the simulator fit (1.109, would tune the
+    shield to its own evaluator) nor the Mininet fit (2.27, 98.5 % held-out coverage)
+    qualified.
   * Eq 42 weights are illustrative.
   * π₀(s) recursive feasibility (Assumption 3) is not shown.
   * s5 shows that a structurally wrong model defeats the shield.
