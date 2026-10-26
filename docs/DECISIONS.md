@@ -422,3 +422,31 @@ and the latency factor can only be fitted once a slot's latency is a real p99.
    `vgcp.experiments.calibrate`, and adopt it if its coverage on seeds 4-5 is at
    least 99 %; otherwise keep 1.5. The simulator fit (1.109) is not adopted, since
    it would tune the shield to its own evaluator. *Pending the campaign.*
+
+### Results, 2026-10-26 (runs at commit `88d5a84`)
+
+* **Integration:** 11/11 in both passes, twice (`mininet-20261026T132240Z`,
+  `mininet-20261026T134135Z`), including the new frame-rate test; no leftovers.
+* **Meter sweep** (`meter-sweep-20261026T132641Z`): admitted frames / budget is
+  1.000 (0.997-1.000) at every rate (1-70 Mbit/s), frame size (64-1514 B, and the
+  old fragmenting payload) and burst (0.01-1 s). The meter is exact in steady state,
+  and it counts Ethernet frames. The header-and-fragment hypothesis is **refuted**.
+* **Where the overshoot comes from instead.** In the 5-seed campaign, every metered
+  eMBB slot in s2 also modified the meter (the certified budget moves by fractions of
+  a Mbit/s with the measured background), and those slots admitted 1.068× the budget
+  on average (median 1.066, range 1.013-1.122, 385 slots). Working hypothesis: a meter
+  modification refills its token bucket. Not yet confirmed, because no metered slot
+  was left unmodified. `meter_sweep --part modify` tests exactly that (A/B, per burst
+  size). The model in c, T̂ and π₀ waits for that result.
+* **Latency factor k: keep 1.5.** Fitted on seeds 1-3 (8100 points): k = 2.272;
+  held-out coverage on seeds 4-5 is 98.5 %, below the 99 % rule (per scenario 98.1,
+  99.1, 98.4 %). The configured 1.5 covers 95.3 %. The fit is driven by URLLC's tail
+  (ratio p99 3.7, max 17). Report: `mininet-20261026T134135Z/calibration-k/`.
+* **New finding: latency spikes on idle paths.** With 100 probes, URLLC's slot p99
+  exceeded 1 ms in 43 slots of s1 and 124 of s3 (up to 18.8 ms on path A, whose
+  propagation delay is 0.2 ms), in every controller and clustered by run (18 slots in
+  one shielded s1 trial). This is not queueing, and points at the host (WSL
+  scheduling, or the per-slot counter reads stalling ping). `meter_sweep --part
+  latency` compares an idle path with and without those reads. Until that is
+  resolved, Mininet latency violations on lightly loaded paths are not attributable
+  to the controller, and the k fit inherits them.

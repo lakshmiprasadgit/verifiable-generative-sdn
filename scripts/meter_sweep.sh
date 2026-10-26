@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # OVS meter diagnostic (DECISIONS 2026-10-26). Needs root; about 3 minutes.
-#   sudo scripts/meter_sweep.sh
+#   sudo scripts/meter_sweep.sh                 everything (about 6 minutes)
+#   sudo scripts/meter_sweep.sh --part modify   one part: grid, modify or latency
 # Builds the emulated network once, sweeps fixed meter rates x datagram sizes with
 # only eMBB installed, and writes experiments/results/meter-sweep-<UTC time>/
 # (sweep.json, sweep.md, sweep.log), owned by the invoking user afterwards. Changes
@@ -15,7 +16,7 @@ export PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1
 modprobe openvswitch
 systemctl is-active --quiet openvswitch-switch || systemctl start openvswitch-switch
 mn -c >/dev/null 2>&1
-.venv/bin/python -m vgcp.experiments.meter_sweep --out "$OUT" 2>&1 | grep -v 'sch_htb: quantum' | tee "$OUT/sweep.log"
+.venv/bin/python -m vgcp.experiments.meter_sweep --out "$OUT" "$@" 2>&1 | grep -v 'sch_htb: quantum' | tee "$OUT/sweep.log"
 rc=${PIPESTATUS[0]}
 mn -c >/dev/null 2>&1
 chown -R "$OWNER": "$OUT"
