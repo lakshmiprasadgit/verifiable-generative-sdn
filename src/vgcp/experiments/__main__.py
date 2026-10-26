@@ -145,7 +145,7 @@ COLUMNS = [
 def render_markdown(table: dict, manifest: dict) -> str:
     kind = ("Simulated backend (ground truth)" if manifest["backend"] == "simulated"
             else "Emulated Mininet backend (measured values, not ground truth; overload is not observable, "
-                 "latency is the max of the slot's probes)")
+                 "latency is the p99 of the slot's ping probes, RTT/2)")
     lines = [f"{kind}. Commit `{manifest['git_commit'][:7]}`"
              f"{' (dirty)' if manifest['git_dirty'] else ''}, seeds {manifest['seeds']}. "
              "Values are mean ± std over seeds.", ""]
