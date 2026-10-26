@@ -129,6 +129,15 @@ def test_background_is_measured_and_slices_excluded(make_net, cfg):
     assert obs.state.value("background_load_mbps.l12") < 2.0
 
 
+def test_counters_read_the_scenario_rates_as_frame_rates(make_net, cfg):
+    """Scenario rates are Ethernet frame rates; iperf3 is given the matching payload rate
+    (DECISIONS 2026-10-26), so the counters must read the scenario's numbers back."""
+    obs = _settle(make_net())
+    assert obs.demand.value("offered_load_mbps.embb") == pytest.approx(80.0, rel=0.05)
+    assert obs.demand.value("offered_load_mbps.urllc") == pytest.approx(2.0, rel=0.1)
+    assert obs.demand.value("offered_load_mbps.mmtc") == pytest.approx(2.0, rel=0.1)
+
+
 def test_probe_latency_matches_link_delays(make_net, cfg):
     obs = _settle(make_net())
     # path B: 2 x 5 ms one way; probes add queueing and host overhead, never less

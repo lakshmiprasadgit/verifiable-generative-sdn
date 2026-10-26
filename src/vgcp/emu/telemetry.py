@@ -18,7 +18,9 @@ Definitions (one control slot between snapshots, dt seconds):
   delivered (throughput)   delta bytes of its forward rule on the egress switch
   loss                     1 - delivered / admitted
   p99 latency              RTT p99 of the slot's ping probes / 2 (symmetric links);
-                           with 8 probes this is their maximum, not a reliable p99
+                           nearest rank, so with 100 probes the 99th smallest
+
+All rates are Ethernet frame rates (without FCS), as OVS counts them; see plan.py.
 
 Rule counters across a reinstall (reroutes delete and re-add rules): a rule is the
 same rule as in the previous snapshot only if its age (OVS "duration") grew by the

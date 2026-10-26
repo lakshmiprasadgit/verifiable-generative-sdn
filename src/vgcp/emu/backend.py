@@ -38,14 +38,16 @@ from vgcp.emu.openflow import (
     meter_spec,
     slice_classes,
 )
-from vgcp.emu.plan import BACKGROUND, plan_emulation
+from vgcp.emu.plan import BACKGROUND, payload_mbps, plan_emulation, udp_payload_bytes
 from vgcp.emu.telemetry import Snapshot, link_measurements, slice_measurements
 from vgcp.errors import ConfigError
 from vgcp.loop.interfaces import ControllerFailure, Observation
 from vgcp.sim.scenario import Scenario
 from vgcp.state import Demand, Measurement, NetworkState
 
-PROBES_PER_SLOT = 8
+PROBES_PER_SLOT = 100  # p99 is the 99th of 100 probes (DECISIONS 2026-10-26), not the worst of a few
+PROBE_SPAN = 0.9  # probes are spread over this fraction of the slot, so they finish before it ends
+BACKGROUND_FRAME_BYTES = 1442  # 1400-byte UDP payload
 
 
 class MininetNetwork:
@@ -58,6 +60,12 @@ class MininetNetwork:
         self.paths = {pid: p.nodes for pid, p in self.topo.paths.items()}
         self.slices = [s.name for s in cfg.slices]
         self.bg_path = self._background_path()
+        self.frame_bytes = {s: int(self.sc.truth.packet_size_bytes[s]) for s in self.slices}
+        for s, size in self.frame_bytes.items():  # fail before building a network
+            try:
+                udp_payload_bytes(size)
+            except ConfigError as e:
+                raise ConfigError(f"{scenario.name}: packet_size_bytes.{s}: {e}") from None
         self.installed: ControlAction | None = None
         self._pending: deque[tuple[int, ControlAction]] = deque()
         self._meas: list[tuple[dict[str, float], dict[str, float], dict[str, Any]]] = []
@@ -170,11 +178,13 @@ class MininetNetwork:
 
     def _run_slot(self) -> None:
         t, a = self.t, self.installed
+        # scenario rates are frame rates; iperf3 is given the payload rate that produces them
         for s in self.slices:
-            self.fabric.set_traffic(s, self._offered(s, t), int(self.sc.truth.packet_size_bytes[s]))
+            f = self.frame_bytes[s]
+            self.fabric.set_traffic(s, payload_mbps(self._offered(s, t), f), udp_payload_bytes(f))
         bg = sum(e.mbps for e in self.sc.background if e.window.active(t))
-        self.fabric.set_traffic(BACKGROUND, bg, 1400)
-        self.fabric.start_probes(self.slices, PROBES_PER_SLOT, self.dt / (PROBES_PER_SLOT + 2))
+        self.fabric.set_traffic(BACKGROUND, payload_mbps(bg, BACKGROUND_FRAME_BYTES), udp_payload_bytes(BACKGROUND_FRAME_BYTES))
+        self.fabric.start_probes(self.slices, PROBES_PER_SLOT, PROBE_SPAN * self.dt / PROBES_PER_SLOT)
         deadline = self._start + (t + 1) * self.dt
         self.sleep(max(0.0, deadline - self.clock()))
         before, after = self._snap, self.fabric.snapshot()

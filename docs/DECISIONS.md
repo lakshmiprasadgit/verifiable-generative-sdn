@@ -381,3 +381,44 @@ the configured traffic. It also isolated two remaining causes.
 
    Until then the reservation-limit metric on Mininet reflects this actuation
    error.
+
+---
+
+## 2026-10-26 · Team decisions: rate units, latency probes, the meter, the latency factor
+
+The four open items of 2026-10-22 were decided together, because they interact: the
+unit mismatch and eMBB's fragmentation may explain part of the meter's overshoot,
+and the latency factor can only be fitted once a slot's latency is a real p99.
+
+1. **Rate units: Ethernet frames.** Every rate in the project (scenario demand and
+   background, rate budgets, link capacity, telemetry) is a wire rate of Ethernet
+   frames without FCS, and every packet size is a frame size. That is what OVS rule
+   and port counters, OVS meters and the HTB link shaper count, so the constraint,
+   the actuator and the measurement now use one unit. Only iperf3 works in UDP
+   payload: the Mininet backend gives it payload = frame − 42 bytes (Ethernet 14,
+   IPv4 20, UDP 8) at the rate that puts the frame rate on the wire, and refuses
+   frame sizes that would fragment (> 1514) or cannot carry iperf3's header (< 58).
+   * eMBB's frames are 1514 bytes (1472-byte payload), one unfragmented 1500-byte
+     IP packet. Its old 1500-byte payload fragmented into a 1514- and a 62-byte
+     frame, about 5 % more on the wire than the scenario's rate.
+   * The simulator's rates were never tied to a layer; they are now frames. Its only
+     change is eMBB's serialization time (1514 instead of 1500 bytes, also in the
+     nominal model), a 1 % difference in a sub-0.1 ms term.
+   * Mininet campaigns before this change offered payload rates, so their offered
+     loads read 5-66 % above the scenario rates (eMBB about 5 %, URLLC 66 %).
+2. **Latency: p99 of 100 probes.** A slot's latency is the nearest-rank p99 of 100
+   pings spread over 90 % of the slot (the 99th smallest RTT, halved), replacing the
+   maximum of 8, which let one outlier decide the slot. The probe traffic is about
+   0.1 Mbit/s per slice.
+3. **The meter's overshoot: diagnose, then model.** `sudo scripts/meter_sweep.sh`
+   (`vgcp.experiments.meter_sweep`, about 3 minutes) fixes meter rates (1-70 Mbit/s)
+   and datagram sizes (64-byte frames to the old fragmenting eMBB payload) and
+   measures what passes. The overshoot will then be modelled in the capacity
+   constraint, T̂ and π₀(s), not hidden by programming meters below the budget.
+   *Pending the sweep's result.*
+4. **Latency factor k: fitted on Mininet, adopted only if it holds on held-out
+   seeds.** After the changes above, run the Mininet campaign on seeds 1-5
+   (`sudo scripts/mininet_run.sh --campaign --seeds 1-5`), fit k on seeds 1-3 with
+   `vgcp.experiments.calibrate`, and adopt it if its coverage on seeds 4-5 is at
+   least 99 %; otherwise keep 1.5. The simulator fit (1.109) is not adopted, since
+   it would tune the shield to its own evaluator. *Pending the campaign.*

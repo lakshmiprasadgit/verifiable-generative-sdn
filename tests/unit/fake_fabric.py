@@ -16,7 +16,7 @@ import re
 
 from vgcp.emu.fabric import FabricError
 from vgcp.emu.openflow import FlowCounters, PortCounters
-from vgcp.emu.plan import EmulationPlan
+from vgcp.emu.plan import FRAME_OVERHEAD_BYTES, EmulationPlan
 from vgcp.emu.telemetry import Snapshot
 
 
@@ -46,6 +46,7 @@ class FakeFabric:
         self._tx: dict[tuple[str, int], float] = {}
         self._last = 0.0
         self._probe: list[str] = []
+        self._probe_count = 0
 
     def _maybe_fail(self, op):
         if self.fail_on == op:
@@ -93,10 +94,13 @@ class FakeFabric:
         self.calls.append(("set_port", switch, port, up))
 
     def set_traffic(self, cls, mbps, packet_bytes):
-        self.rates[cls] = (mbps, packet_bytes)
+        """mbps of UDP payload in packet_bytes datagrams, like iperf3; counters see frames."""
+        self.rates[cls] = (mbps * (packet_bytes + FRAME_OVERHEAD_BYTES) / packet_bytes, packet_bytes)
+        self.calls.append(("set_traffic", cls, mbps, packet_bytes))
 
     def start_probes(self, slices, count, interval_s):
-        self._probe = list(slices)
+        self._probe, self._probe_count = list(slices), count
+        self.calls.append(("start_probes", count, interval_s))
 
     # ---------------------------------------------------------------- counters
     def _forward(self, cls):
@@ -138,10 +142,10 @@ class FakeFabric:
                 self._tx[(sw, out)] = self._tx.get((sw, out), 0.0) + admitted * 1e6 / 8 * dt
         ports = {sw: {} for sw in self.plan.switches}
         for (sw, port), b in self._tx.items():
-            ports[sw][port] = PortCounters(0, 0, 0, int(b), 0)
+            ports[sw][port] = PortCounters(0, 0, 0, round(b), 0)
         for l in self.plan.links.values():
             ports[l.a].setdefault(l.port_a, PortCounters(0, 0, 0, 0, 0))
-        flows = {sw: [FlowCounters(r.cookie, r.priority, r.match, 0, int(self._flow_bytes.get((sw, r.cookie, r.match), 0)),
+        flows = {sw: [FlowCounters(r.cookie, r.priority, r.match, 0, round(self._flow_bytes.get((sw, r.cookie, r.match), 0)),
                                    int(re.search(r"output:(\d+)", r.actions).group(1)),
                                    self.clock() - self._installed.get((sw, r.cookie, r.match), 0.0))
                       for r in self.rules[sw]]
@@ -153,7 +157,7 @@ class FakeFabric:
                 continue
             hops = load.get(s, ([], 0, 0))[0]
             delay = sum(l.delay_ms for l in self.plan.links.values() for sw, _, out in hops if (l.a, l.port_a) == (sw, out))
-            rtts[s] = [2 * delay + 0.1] * 8
+            rtts[s] = [2 * delay + 0.1] * self._probe_count
         self._probe = []
         return Snapshot(self.clock(), ports, flows, rtts)
 

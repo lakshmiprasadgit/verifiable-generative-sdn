@@ -14,7 +14,7 @@ BASE = {
     "name": "t", "slots": 10,
     "demand_mbps": {"urllc": 2.0, "embb": 80.0, "mmtc": 2.0},
     "devices": {"urllc": 10, "embb": 5, "mmtc": 200},
-    "ground_truth": {"packet_size_bytes": {"urllc": 64, "embb": 1500, "mmtc": 100},
+    "ground_truth": {"packet_size_bytes": {"urllc": 64, "embb": 1514, "mmtc": 100},
                      "processing_delay_ms_per_hop": 0.05, "latency_noise": 0.0,
                      "measurement_noise": 0.0, "buffer_ms": 50.0},
 }

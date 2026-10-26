@@ -46,11 +46,11 @@ def test_budget_and_admission_limit_load(cfg, model):
 
 
 def test_shared_link_uses_largest_packet(cfg, model):
-    # urllc and embb both on A: S = 1500 B / 50 Mbit/s = 0.24 ms
+    # urllc and embb both on A: S = 1514 B frame / 50 Mbit/s = 0.24224 ms
     a = action_with(cfg, path={"embb": "A"}, rate_budget_mbps={"embb": 20.0})
     pred = model.predict(nominal_state(cfg), a, nominal_demand())
     rho = (2.0 + 20.0) / 50
-    hop = 0.1 + 0.05 + LN100 * 0.24 / (1 - rho)
+    hop = 0.1 + 0.05 + LN100 * 0.24224 / (1 - rho)
     assert pred.state.value("latency_p99_ms.urllc") == pytest.approx(1.5 * 2 * hop)
 
 

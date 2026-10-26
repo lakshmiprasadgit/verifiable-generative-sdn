@@ -8,7 +8,7 @@ demand_mbps: {urllc: 2.0, embb: 80.0, mmtc: 2.0}
 devices: {urllc: 10, embb: 5, mmtc: 200}
 demand_noise: 0.05
 ground_truth:
-  packet_size_bytes: {urllc: 1500, embb: 1500, mmtc: 500}
+  packet_size_bytes: {urllc: 1500, embb: 1514, mmtc: 500}   # Ethernet frame bytes
   processing_delay_ms_per_hop: 0.05
   latency_noise: 0.2
   measurement_noise: 0.02

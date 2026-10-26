@@ -285,6 +285,38 @@ def test_lost_probes_are_unknown_to_the_shield_and_infinite_in_scoring(cfg):
     assert not cert.accepted and "latency_p99_ms.urllc" in cert.check("state_measurements").data["problems"]
 
 
+def test_traffic_generator_gets_payload_rates_that_put_the_frame_rate_on_the_wire(cfg):
+    """Scenario rates and sizes are Ethernet frames (DECISIONS 2026-10-26); iperf3 takes UDP payload."""
+    net, fabric, _ = _net(cfg, background=[{"start": 0, "end": 10, "links": ["l13", "l35"], "mbps": 50.0}])
+    calls = {c[1]: c[2:] for c in fabric.calls if c[0] == "set_traffic"}
+    assert calls["embb"] == (pytest.approx(80.0 * 1472 / 1514), 1472)  # one unfragmented 1500-byte IP packet
+    assert calls["urllc"] == (pytest.approx(2.0 * 22 / 64), 22)
+    assert calls["bg"] == (pytest.approx(50.0 * 1400 / 1442), 1400)
+    obs = net.observe()  # the counters see frames, i.e. the scenario's rates again
+    assert obs.demand.value("offered_load_mbps.embb") == pytest.approx(80.0)
+    assert obs.state.value("background_load_mbps.l13") == pytest.approx(50.0)
+
+
+@pytest.mark.parametrize("size", [1515, 57])
+def test_backend_rejects_frames_that_fragment_or_cannot_carry_iperf3(cfg, size):
+    with pytest.raises(ConfigError, match="packet_size_bytes.embb"):
+        _net(cfg, ground_truth={**BASE["ground_truth"],
+                                "packet_size_bytes": {**BASE["ground_truth"]["packet_size_bytes"], "embb": size}})
+
+
+def test_latency_is_the_p99_of_100_probes_spread_over_the_slot(cfg):
+    net, fabric, _ = _net(cfg)
+    (count, interval), = {c[1:] for c in fabric.calls if c[0] == "start_probes"}
+    assert count == 100 and count * interval <= 0.9 * cfg.delta_t_s + 1e-9
+
+
+def test_one_outlier_among_100_probes_does_not_set_the_p99(cfg, plan):
+    snap = Snapshot(0.0, {}, {})
+    rtts = {"urllc": [0.6] * 99 + [40.0]}
+    out = slice_measurements(plan, snap, Snapshot(1.0, {}, {}, rtts), {"urllc": 0x100}, {"urllc": ("s1", "s2", "s5")})
+    assert out["latency_p99_ms.urllc"] == pytest.approx(0.3)
+
+
 def test_backend_rejects_background_on_two_paths(cfg):
     with pytest.raises(ConfigError, match="more than one path"):
         _net(cfg, background=[{"start": 0, "end": 5, "links": ["l13"], "mbps": 1.0},

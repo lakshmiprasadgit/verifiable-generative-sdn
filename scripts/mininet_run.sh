@@ -7,6 +7,8 @@
 #   sudo scripts/mininet_run.sh --campaign --only s2_background_on_embb_path
 #                                            campaign restricted to the named scenario(s),
 #                                            comma-separated (s2 alone: about 17 minutes)
+#   sudo scripts/mininet_run.sh --campaign --seeds 1-5
+#                                            seeds to run (default 1-3; each seed adds about a third)
 # The integration file runs PASSES times (default 2) without any cleanup in between,
 # so a leaked interface, bridge or process from one pass fails the next.
 # Everything is written to experiments/results/mininet-<UTC time>/ and owned by the
@@ -18,11 +20,13 @@ cd "$(dirname "$0")/.."
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo: sudo $0 $*"; exit 1; fi
 CAMPAIGN=0
 ONLY="s1_steady,s2_background_on_embb_path,s3_background_on_urllc_path"
+SEEDS="1-3"
 while [ $# -gt 0 ]; do
   case "$1" in
     --campaign) CAMPAIGN=1 ;;
     --only) shift; ONLY="${1:-}" ;;
-    *) echo "unknown argument: $1 (use --campaign [--only scenario[,scenario]])"; exit 2 ;;
+    --seeds) shift; SEEDS="${1:-}" ;;
+    *) echo "unknown argument: $1 (use --campaign [--only scenario[,scenario]] [--seeds 1-3])"; exit 2 ;;
   esac
   shift
 done
@@ -63,7 +67,7 @@ elif [ "$CAMPAIGN" -eq 1 ]; then
     FILES+=("$f")
   done
   .venv/bin/python -m vgcp.experiments --backend mininet --scenarios "${FILES[@]}" \
-      --seeds 1-3 --out "$OUT/campaign" 2>&1 | tee -a "$OUT/campaign.log"
+      --seeds "$SEEDS" --out "$OUT/campaign" 2>&1 | tee -a "$OUT/campaign.log"
   mn -c >/dev/null 2>&1
 else
   echo "integration tests passed; campaign not requested (add --campaign)" | tee "$OUT/campaign.log"

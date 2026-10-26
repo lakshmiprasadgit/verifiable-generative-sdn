@@ -11,7 +11,7 @@ demand_noise: 0.05
 background:
   - {start: 20, end: 40, links: [l13, l35], mbps: 120.0}
 ground_truth:
-  packet_size_bytes: {urllc: 64, embb: 1500, mmtc: 100}
+  packet_size_bytes: {urllc: 64, embb: 1514, mmtc: 100}   # Ethernet frame bytes (eMBB: 1472-byte payload, unfragmented)
   processing_delay_ms_per_hop: 0.05
   latency_noise: 0.05
   measurement_noise: 0.02

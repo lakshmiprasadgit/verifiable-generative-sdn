@@ -49,7 +49,7 @@ class MissingTelemetry:
 
 @dataclass(frozen=True)
 class GroundTruth:
-    packet_size_bytes: Mapping[str, float]  # true mean packet sizes (may differ from the model)
+    packet_size_bytes: Mapping[str, float]  # true mean Ethernet frame sizes (may differ from the model)
     processing_delay_ms_per_hop: float
     latency_noise: float  # relative std of multiplicative latency noise
     measurement_noise: float  # relative std of telemetry noise

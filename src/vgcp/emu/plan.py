@@ -19,6 +19,27 @@ from vgcp.errors import ConfigError
 
 BACKGROUND = "bg"
 
+# Rate units (DECISIONS 2026-10-26): every rate in the project (scenario demand and
+# background, budgets, link capacity, telemetry) is a wire rate of Ethernet frames
+# without FCS, which is what OVS rule and port counters, OVS meters and the HTB link
+# shaper all count. Packet sizes are frame sizes. Only iperf3 works in UDP payload,
+# so the traffic generator converts with these constants.
+FRAME_OVERHEAD_BYTES = 42  # Ethernet header 14 + IPv4 20 + UDP 8
+MAX_FRAME_BYTES = 1514  # 1500-byte IP MTU: a larger datagram would fragment into two frames
+MIN_FRAME_BYTES = FRAME_OVERHEAD_BYTES + 16  # iperf3 needs 16 bytes of UDP payload for its own header
+
+
+def udp_payload_bytes(frame_bytes: int) -> int:
+    if not MIN_FRAME_BYTES <= frame_bytes <= MAX_FRAME_BYTES:
+        raise ConfigError(f"frame size {frame_bytes} B outside [{MIN_FRAME_BYTES}, {MAX_FRAME_BYTES}] "
+                          "(one unfragmented UDP datagram per frame)")
+    return frame_bytes - FRAME_OVERHEAD_BYTES
+
+
+def payload_mbps(frame_mbps: float, frame_bytes: int) -> float:
+    """The iperf3 (UDP payload) rate that puts frame_mbps of frames on the wire."""
+    return frame_mbps * udp_payload_bytes(frame_bytes) / frame_bytes
+
 
 @dataclass(frozen=True)
 class HostPlan:

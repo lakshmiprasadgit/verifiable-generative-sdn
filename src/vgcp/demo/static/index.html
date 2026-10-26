@@ -577,7 +577,7 @@ function labels() {
   const mn = RUN?.backend === "mininet";
   return {
     src: mn ? "Mininet: measured at t+1 (not ground truth)" : "simulator ground truth at t+1 (simulation, not a real network)",
-    lat: mn ? "max of 8 probes (RTT/2)" : "p99 (simulator model)",
+    lat: mn ? "p99 of 100 probes (RTT/2)" : "p99 (simulator model)",
     note: mn ? "Mininet values are emulated-network measurements. Offered load, background, loss and throughput come from flow counters that are provisional (reroute resets, pre-meter ingress counters, counter steps). Overload cannot be observed: link utilization is post-shaping."
       : "Outcome values are the simulator's ground truth for the slot after the decision; the controller only saw the noisy telemetry shown under 'Observation'. Simulation results say nothing about real-network safety.",
   };
@@ -765,7 +765,7 @@ async function showHistory() {
   const mn = String(h.backend).startsWith("mininet");
   const caveat = mn
     ? `Mininet campaign (emulated network, measured values, not ground truth). Known measurement limitations (audit 2026-10-22): flow counters reset on reroute, so eMBB throughput is <b>unavailable</b> for any trial with a missing slot;
-       background under-measured when the ingress meter drops traffic; counter steps distort offered load and loss; latency is the <b>max of 8 probes (RTT/2)</b>, not a reliable p99; overload slots are <b>not meaningful</b> (post-shaping utilization cannot exceed capacity).`
+       background under-measured when the ingress meter drops traffic; counter steps distort offered load and loss; latency in campaigns before 2026-10-26 is the <b>max of 8 probes (RTT/2)</b>, not a reliable p99 (later: p99 of 100); overload slots are <b>not meaningful</b> (post-shaping utilization cannot exceed capacity).`
     : "Simulated-backend campaign (simulator ground truth). Not real-network measurements.";
   const cols = [["any_violation_slots", "violation slots"], ["overload_slots", "overload slots"], ["reservation_violation_slots", "reservation-limit slots"],
                 ["fallback_slots", "fallback slots"], ["uncertified_fallback_slots", "uncertified fallback"], ["candidate_rejection_rate", "rejection rate"],
