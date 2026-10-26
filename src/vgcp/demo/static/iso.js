@@ -239,84 +239,122 @@
   const hash = (x, y) => (((x + 17) * 73856093) ^ ((y + 31) * 19349663)) >>> 0;
 
   // ---------------------------------------------------------------- the scene
-  function render(svg, opts) {
-    const T = opts.topology, st = opts.state || null, limit = opts.limit || 0.9;
-    const util = (st && st.link_util) || {}, bg = (st && st.background_mbps) || {}, inst = st && st.installed;
-    const thr = (st && st.throughput_mbps) || {}, power = (inst && inst.link_power) || {};
+  // Everything that depends only on the topology (ground, roads, paint, decor, path
+  // labels, framing) is built once and cached; each slot only adds what moves.
+  const sceneCache = new WeakMap();
+  function staticScene(T) {
+    if (sceneCache.has(T)) return sceneCache.get(T);
     const C = cityLayout(T), {node, links, half, bounds: B} = C;
-    const ground = [], marks = [], objs = [], labels = [];
-    const add = (depth, svgText) => objs.push([depth, svgText]);
-
-    // diorama slab: grass on top, soil sides
-    ground.push(mbox(B.x0, B.y0, -0.35, B.x1 - B.x0, B.y1 - B.y0, 0.35, {top: MONO.ground, left: MONO.groundLeft, right: MONO.groundRight}));
-    // sidewalks, then asphalt, per link segment; squares at bends and plazas at nodes
     const segs = [];
     for (const [lid, k] of Object.entries(links))
       for (let i = 0; i < k.poly.length - 1; i++) segs.push([lid, k.poly[i], k.poly[i + 1], k.w]);
+    const nodeAt = (p) => Object.keys(node).find((n) => node[n][0] === p[0] && node[n][1] === p[1]);
+
+    // diorama slab, then sidewalks and asphalt (each outlined as one shape)
     const walks = [], asphalt = [];
     for (const [, a, b, w] of segs) walks.push([...segRect(a, b, w + 0.44), MONO.walk]);
     for (const n of Object.keys(node)) { const [x, y] = node[n], h = half[n] + 0.22; walks.push([x - h, y - h, 2 * h, 2 * h, MONO.walk]); }
     for (const k of Object.values(links)) for (const p of k.poly.slice(1, -1)) { const h = k.w / 2 + 0.22; walks.push([p[0] - h, p[1] - h, 2 * h, 2 * h, MONO.walk]); }
     for (const [, a, b, w] of segs) asphalt.push([...segRect(a, b, w), MONO.road]);
     for (const k of Object.values(links)) for (const p of k.poly.slice(1, -1)) asphalt.push([p[0] - k.w / 2, p[1] - k.w / 2, k.w, k.w, MONO.road]);
-    ground.push(outlined(walks), outlined(asphalt));
-    for (const [lid, a, b, w] of segs) {
-      const [x, y, dx, dy] = segRect(a, b, w);
-      const u = util[lid];
-      if (power[lid] === false) ground.push(flat(x, y, dx, dy, "#9AA1AB", 0, 'fill-opacity="0.55"'));
-      else if (isNum(u) && u > 1.0) ground.push(flat(x, y, dx, dy, "#E5483C", 0, 'fill-opacity="0.45"'));
-      else if (isNum(u) && u > limit) ground.push(flat(x, y, dx, dy, "#F5A524", 0, 'fill-opacity="0.4"'));
-    }
-    for (const n of Object.keys(node)) { const [x, y] = node[n], h = half[n]; ground.push(flat(x - h, y - h, 2 * h, 2 * h, MONO.plaza, 0, OUT)); }
+    const groundBase = mbox(B.x0, B.y0, -0.35, B.x1 - B.x0, B.y1 - B.y0, 0.35, {top: MONO.ground, left: MONO.groundLeft, right: MONO.groundRight})
+      + outlined(walks) + outlined(asphalt);
+    let groundTop = "";
+    for (const n of Object.keys(node)) { const [x, y] = node[n], h = half[n]; groundTop += flat(x - h, y - h, 2 * h, 2 * h, MONO.plaza, 0, OUT); }
 
-    // lane dashes and zebra crossings
+    // lane dashes, zebra crossings and the switch names painted on their intersections
+    let marks = "";
     for (const [, a, b, w] of segs) {
       const horiz = a[1] === b[1], len = Math.abs(horiz ? b[0] - a[0] : b[1] - a[1]), dir = Math.sign(horiz ? b[0] - a[0] : b[1] - a[1]);
-      const startPad = (node_at(a) ? half[node_at(a)] : w / 2) + 0.35, endPad = (node_at(b) ? half[node_at(b)] : w / 2) + 0.35;
-      for (let s = startPad; s + 0.3 < len - endPad; s += 0.6) {
-        const c = horiz ? [a[0] + dir * (s + 0.15), a[1]] : [a[0], a[1] + dir * (s + 0.15)];
-        marks.push(horiz ? flat(c[0] - 0.15, c[1] - 0.025, 0.3, 0.05, MONO.paint) : flat(c[0] - 0.025, c[1] - 0.15, 0.05, 0.3, MONO.paint));
+      const startPad = (nodeAt(a) ? half[nodeAt(a)] : w / 2) + 0.35, endPad = (nodeAt(b) ? half[nodeAt(b)] : w / 2) + 0.35;
+      for (let d = startPad; d + 0.3 < len - endPad; d += 0.6) {
+        const c = horiz ? [a[0] + dir * (d + 0.15), a[1]] : [a[0], a[1] + dir * (d + 0.15)];
+        marks += horiz ? flat(c[0] - 0.15, c[1] - 0.025, 0.3, 0.05, MONO.paint) : flat(c[0] - 0.025, c[1] - 0.15, 0.05, 0.3, MONO.paint);
       }
       for (const [end, sgn] of [[a, dir], [b, -dir]]) {
-        const n = node_at(end); if (!n) continue;
+        const n = nodeAt(end); if (!n) continue;
         const from = half[n] + 0.04;
         for (let v = -w / 2 + 0.06; v + 0.06 <= w / 2; v += 0.13)
-          marks.push(horiz ? flat(end[0] + sgn * from + (sgn > 0 ? 0 : -0.26), end[1] + v, 0.26, 0.065, MONO.paint)
-                           : flat(end[0] + v, end[1] + sgn * from + (sgn > 0 ? 0 : -0.26), 0.065, 0.26, MONO.paint));
+          marks += horiz ? flat(end[0] + sgn * from + (sgn > 0 ? 0 : -0.26), end[1] + v, 0.26, 0.065, MONO.paint)
+                         : flat(end[0] + v, end[1] + sgn * from + (sgn > 0 ? 0 : -0.26), 0.065, 0.26, MONO.paint);
       }
     }
-    function node_at(p) { return Object.keys(node).find((n) => node[n][0] === p[0] && node[n][1] === p[1]); }
+    for (const n of Object.keys(node)) marks += paintNode(node[n][0], node[n][1], half[n], n, n === T.ingress ? "GATE" : n === T.egress ? "HUB" : "");
 
-    // decor in the free tiles: never on a road or plaza
+    // decor in the free tiles, never on a road or plaza; sorted by depth once
+    const decor = [];
     const busy = (cx, cy) => segs.some(([, a, b, w]) => { const [x, y, dx, dy] = segRect(a, b, w + 1.2); return cx > x && cx < x + dx && cy > y && cy < y + dy; })
       || Object.keys(node).some((n) => Math.abs(cx - node[n][0]) < half[n] + 0.8 && Math.abs(cy - node[n][1]) < half[n] + 0.8);
     for (let gx = Math.ceil(B.x0); gx < B.x1 - 0.5; gx++) for (let gy = Math.ceil(B.y0); gy < B.y1 - 0.5; gy++) {
       const cx = gx + 0.5, cy = gy + 0.5;
-      if (busy(cx, cy) || hash(gy, gx) % 100 >= STYLE.decorDensity) continue; // keep the city sparse
+      if (hash(gy, gx) % 100 >= STYLE.decorDensity || busy(cx, cy)) continue; // keep the city sparse
       const h = hash(gx, gy) % 100, x = gx + 0.2, y = gy + 0.2; // a 0.6-tile lot in the middle of the tile
       // tall objects hide what lies behind them on screen, so towers only stand in the
       // back ring (behind every road); elsewhere the city stays low
       const back = cx < 0 || cy < 0;
-      if (h < 22) add(cx + cy, Asset.house(x, y, 0.6, 0.6, back ? 0.58 : 0.46));
-      else if (h < 36 && back) add(cx + cy, Asset.tower(x, y, 0.6, 0.6, 1.3 + (h % 3) * 0.25));
-      else if (h < 48) add(cx + cy, Asset.shop(x, y, 0.6, 0.55));
-      else if (h < 90) add(cx + cy, Asset.tree(cx, cy, 0.85));
-      else add(cx + cy, Asset.lamp(cx, cy));
+      if (h < 22) decor.push([cx + cy, Asset.house(x, y, 0.6, 0.6, back ? 0.58 : 0.46)]);
+      else if (h < 36 && back) decor.push([cx + cy, Asset.tower(x, y, 0.6, 0.6, 1.3 + (h % 3) * 0.25)]);
+      else if (h < 48) decor.push([cx + cy, Asset.shop(x, y, 0.6, 0.55)]);
+      else if (h < 90) decor.push([cx + cy, Asset.tree(cx, cy, 0.85)]);
+      else decor.push([cx + cy, Asset.lamp(cx, cy)]);
+    }
+    decor.sort((a, b) => a[0] - b[0]);
+
+    // path names, flat text on top, beside each path's middle switch
+    let labels = "";
+    for (const pid of Object.keys(T.paths)) {
+      const ns = T.paths[pid].nodes, m = ns[Math.floor(ns.length / 2)], [x, y] = node[m], h = half[m];
+      const [tx, ty] = P(x - h - 0.9, y - h - 0.25, 0);
+      labels += `<text x="${r1(tx)}" y="${r1(ty)}" text-anchor="middle" font-size="11" font-weight="700" style="fill:#FFFFFF;stroke:${MONO.ink};stroke-width:3.5px;paint-order:stroke">Path ${esc(pid)}</text>`;
+    }
+
+    // per link: its longest segment carries the sign; per path: the route vehicles follow
+    const signAt = {};
+    for (const [lid, k] of Object.entries(links)) {
+      let best = null;
+      for (let i = 0; i < k.poly.length - 1; i++) {
+        const a = k.poly[i], b = k.poly[i + 1], L = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]);
+        if (!best || L > best[2]) best = [a, b, L];
+      }
+      signAt[lid] = best;
+    }
+    const routes = {};
+    for (const [pid, p] of Object.entries(T.paths)) {
+      const out = [];
+      for (const lid of p.links) { const pl = links[lid].poly; for (const q of (out.length ? pl.slice(1) : pl)) out.push(q); }
+      routes[pid] = out;
+    }
+    const [xa] = P(B.x0, B.y1, 0), [xb] = P(B.x1, B.y0, 0), [, ya] = P(B.x0, B.y0, 1.6), [, yb] = P(B.x1, B.y1, -0.35);
+    const scene = {C, segs, groundBase, groundTop, marks, decor, labels, signAt, routes, legends: new Map(),
+                   viewBox: `${r1(xa - 12)} ${r1(ya - 8)} ${r1(xb - xa + 24)} ${r1(yb - ya + 20)}`};
+    sceneCache.set(T, scene);
+    return scene;
+  }
+
+  function render(svg, opts) {
+    const T = opts.topology, st = opts.state || null, limit = opts.limit || 0.9;
+    const util = (st && st.link_util) || {}, bg = (st && st.background_mbps) || {}, inst = st && st.installed;
+    const thr = (st && st.throughput_mbps) || {}, power = (inst && inst.link_power) || {};
+    const scene = staticScene(T), {node, links, half} = scene.C;
+    const objs = [];
+    const add = (depth, svgText) => objs.push([depth, svgText]);
+
+    // road tint: overloaded (over the reservation limit or capacity) or powered off
+    let overlays = "";
+    for (const [lid, a, b, w] of scene.segs) {
+      const [x, y, dx, dy] = segRect(a, b, w), u = util[lid];
+      if (power[lid] === false) overlays += flat(x, y, dx, dy, "#9AA1AB", 0, 'fill-opacity="0.55"');
+      else if (isNum(u) && u > 1.0) overlays += flat(x, y, dx, dy, "#E5483C", 0, 'fill-opacity="0.45"');
+      else if (isNum(u) && u > limit) overlays += flat(x, y, dx, dy, "#F5A524", 0, 'fill-opacity="0.4"');
     }
 
     // vehicles: count follows the rate; unknown rates draw none
-    const route = (pid) => {
-      const p = T.paths[pid]; if (!p) return null;
-      const out = [];
-      for (const lid of p.links) { const pl = links[lid].poly; for (const q of (out.length ? pl.slice(1) : pl)) out.push(q); }
-      return out;
-    };
+    const onPlaza = (x, y) => Object.keys(node).some((m) => Math.abs(x - node[m][0]) < half[m] + 0.4 && Math.abs(y - node[m][1]) < half[m] + 0.4);
     const place = (pl, n, lane, phase, draw) => {
       const L = polyLen(pl), lo = 0.7, hi = L - 0.7;
-      // never stop on an intersection: its painted name stays readable
-      const onPlaza = (x, y) => Object.keys(node).some((m) => Math.abs(x - node[m][0]) < half[m] + 0.4 && Math.abs(y - node[m][1]) < half[m] + 0.4);
       for (let i = 0; i < n; i++) {
         let s = lo + ((i + phase) / n % 1) * (hi - lo), [x, y, along] = pointAt(pl, s);
+        // never stop on an intersection: its painted name stays readable
         for (let k = 0; k < 4 && onPlaza(x, y); k++) { s = lo + ((s - lo + 0.5) % (hi - lo)); [x, y, along] = pointAt(pl, s); }
         if (onPlaza(x, y)) continue;
         const [vx, vy] = along === "x" ? [x, y + lane] : [x + lane, y];
@@ -331,10 +369,9 @@
         mmtc: (v) => Math.max(1, Math.min(8, Math.round(v / 0.5 * STYLE.vehicleDensity))),
       };
       for (const sl of Object.keys(counts)) {
-        const pl = route(inst.path[sl]), v = thr[sl];
+        const pid = inst.path[sl], pl = scene.routes[pid], v = thr[sl];
         if (!pl || !isNum(v) || v <= 0) continue;
-        const k = links[T.paths[inst.path[sl]].links[0]].w;
-        const lane = k / 4;
+        const lane = links[T.paths[pid].links[0]].w / 4;
         if (sl === "urllc") place(pl, counts.urllc(v), lane, phase, (x, y, al) => Asset.ambulance(x, y, al));
         if (sl === "embb") place(pl, counts.embb(v), lane, (phase + 0.31) % 1, (x, y, al) => Asset.bus(x, y, al, "#1F6FD1"));
         if (sl === "mmtc") place(pl, counts.mmtc(v), lane, (phase + 0.57) % 1, (x, y, al) => Asset.scooter(x, y, al, "#2E8B57"));
@@ -347,20 +384,15 @@
       place(k.poly, Math.max(1, Math.min(12, Math.round(v / 12 * STYLE.vehicleDensity))), -k.w / 4, (phase + 0.73) % 1, (x, y, al, i) => Asset.car(x, y, al, civ[i % civ.length]));
     }
 
-    // overhead signs: one per link, on its longest segment, showing utilization
+    // overhead signs: one per link, showing utilization
     for (const [lid, k] of Object.entries(links)) {
-      let best = null;
-      for (let i = 0; i < k.poly.length - 1; i++) {
-        const a = k.poly[i], b = k.poly[i + 1], L = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]);
-        if (!best || L > best[2]) best = [a, b, L];
-      }
-      const [a, b] = best, horiz = a[1] === b[1];
+      const [a, b] = scene.signAt[lid], horiz = a[1] === b[1];
       const c = horiz ? [a[0] + (b[0] - a[0]) * 0.62, a[1]] : [a[0], a[1] + (b[1] - a[1]) * 0.62];
       const u = util[lid], off = power[lid] === false;
       const text = off ? `${lid} closed` : isNum(u) ? `${lid} ${Math.round(u * 100)}%` : `${lid} n/a`;
       const colour = off ? "#7A808A" : !isNum(u) ? "#7A808A" : u > 1.0 ? "#C0362C" : u > limit ? "#C77700" : "#2F7D4A";
       add(c[0] + c[1] + 0.3, Asset.gantry(c[0], c[1], horiz ? "x" : "y", k.w, text, colour));
-      if (off) { add(a[0] + a[1], Asset.barrier(...(horiz ? [a[0] + (b[0] > a[0] ? 1 : -1) * 0.8, a[1]] : [a[0], a[1] + (b[1] > a[1] ? 1 : -1) * 0.8]), horiz ? "y" : "x", k.w)); }
+      if (off) add(a[0] + a[1], Asset.barrier(...(horiz ? [a[0] + (b[0] > a[0] ? 1 : -1) * 0.8, a[1]] : [a[0], a[1] + (b[1] > a[1] ? 1 : -1) * 0.8]), horiz ? "y" : "x", k.w));
     }
 
     // the city gate's traffic light shows the controller's decision
@@ -368,24 +400,19 @@
                    "UNCERTIFIED FALLBACK": "red", "NOT APPLIED": "red"}[opts.decision] || null;
     { const [x, y] = node[T.ingress], h = half[T.ingress]; add(x + y - 2 * h, Asset.trafficLight(x - h - 0.12, y - h - 0.12, light)); }
 
-    // switch names painted on their intersections (ground layer: vehicles pass over paint)
-    for (const n of Object.keys(node)) {
-      const [x, y] = node[n];
-      marks.push(paintNode(x, y, half[n], n, n === T.ingress ? "GATE" : n === T.egress ? "HUB" : ""));
-    }
-    // path names (flat text, on top)
-    for (const pid of Object.keys(T.paths)) { // beside the path's middle switch, off the road
-      const ns = T.paths[pid].nodes, m = ns[Math.floor(ns.length / 2)], [x, y] = node[m], h = half[m];
-      const [tx, ty] = P(x - h - 0.9, y - h - 0.25, 0);
-      labels.push(`<text x="${r1(tx)}" y="${r1(ty)}" text-anchor="middle" font-size="11" font-weight="700" style="fill:#FFFFFF;stroke:${MONO.ink};stroke-width:3.5px;paint-order:stroke">Path ${esc(pid)}</text>`);
-    }
-
+    // merge the moving objects into the pre-sorted decor (painter's order by depth)
     objs.sort((a, b) => a[0] - b[0]);
-    const [xa] = P(B.x0, B.y1, 0), [xb] = P(B.x1, B.y0, 0), [, ya] = P(B.x0, B.y0, 1.6), [, yb] = P(B.x1, B.y1, -0.35);
-    svg.setAttribute("viewBox", `${r1(xa - 12)} ${r1(ya - 8)} ${r1(xb - xa + 24)} ${r1(yb - ya + 20)}`);
-    svg.innerHTML = ground.join("") + marks.join("") + objs.map((o) => o[1]).join("") + labels.join("");
+    const parts = [scene.groundBase, overlays, scene.groundTop, scene.marks];
+    for (let i = 0, j = 0; i < scene.decor.length || j < objs.length;)
+      parts.push(j >= objs.length || (i < scene.decor.length && scene.decor[i][0] <= objs[j][0]) ? scene.decor[i++][1] : objs[j++][1]);
+    parts.push(scene.labels);
+    const html = parts.join("");
+    if (svg.getAttribute("viewBox") !== scene.viewBox) svg.setAttribute("viewBox", scene.viewBox);
+    if (svg.__vgcpHtml !== html) { svg.innerHTML = html; svg.__vgcpHtml = html; } // unchanged slot: no DOM work
 
-    return legend(T, limit, light);
+    const key = `${limit}|${light}`;
+    if (!scene.legends.has(key)) scene.legends.set(key, legend(T, limit, light));
+    return scene.legends.get(key);
   }
 
   // ---------------------------------------------------------------- illustrated key

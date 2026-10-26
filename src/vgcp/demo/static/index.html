@@ -21,7 +21,7 @@ button { cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button:disabled { opacity: .45; cursor: not-allowed; }
 .seg { display: inline-flex; padding: 3px; gap: 3px; border: 1px solid var(--line); border-radius: 99px; background: var(--panel); }
-.seg button { border: 0; border-radius: 99px; min-height: 34px; padding: 4px 14px; background: transparent; color: var(--muted); }
+.seg button { border: 0; border-radius: 99px; min-height: 40px; padding: 4px 14px; background: transparent; color: var(--muted); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); font-weight: 600; }
 main { padding: 8px 20px 40px; max-width: 1560px; margin: 0 auto; }
 /* hero: the map with the control panel on its right */
@@ -53,9 +53,6 @@ main { padding: 8px 20px 40px; max-width: 1560px; margin: 0 auto; }
 .dd-pop { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: #F3EDF7; border-radius: 14px; padding: 6px;
   box-shadow: 0 6px 20px rgba(28, 27, 31, .22); max-height: 330px; overflow-y: auto; }
 .dd-half .dd-pop { right: auto; min-width: 100%; width: max-content; max-width: 320px; }
-.cp-lists { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; }
-fieldset.choice { border: 0; padding: 0; margin: 0; min-width: 0; }
-fieldset.choice legend { font-size: 11.5px; color: var(--muted); padding: 0 0 4px; }
 .clist { display: flex; flex-direction: column; gap: 4px; }
 .crow { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) 20px; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border-radius: 12px; background: #FFFFFF; border: 1px solid var(--line); cursor: pointer; font-size: 12.5px; line-height: 1.3; overflow-wrap: anywhere; }
 .crow .cid { color: var(--muted); font-size: 11.5px; font-weight: 600; }
@@ -69,7 +66,7 @@ fieldset.choice legend { font-size: 11.5px; color: var(--muted); padding: 0 0 4p
 .field { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); background: #D3C9E1; border-bottom: 1px solid #49454F; border-radius: 6px 6px 0 0; padding: 6px 10px 5px; }
 .field select, .field input { border: 0; background: transparent; padding: 2px 0; font-size: 14px; color: var(--ink); min-width: 0; width: 100%; }
 .stepper { display: flex; align-items: center; gap: 4px; }
-.stepper button { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 0; background: #FFFFFF; font-weight: 700; }
+.stepper button { flex: 0 0 32px; width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 0; background: #FFFFFF; font-weight: 700; }
 .runbox { margin-top: 14px; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; background: #F7F2FA; }
 .rb-head { display: flex; justify-content: space-between; align-items: center; }
 .pill { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 2px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
@@ -94,7 +91,7 @@ fieldset.choice legend { font-size: 11.5px; color: var(--muted); padding: 0 0 4p
 .lstages { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; list-style: none; margin: 0; padding: 0; }
 .lst { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; background: #FFFFFF; border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 10px; transition: border-color .15s, box-shadow .15s, opacity .15s; }
 .lst-head { display: flex; align-items: center; gap: 8px; }
-.num { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12.5px; font-weight: 700; border: 1.5px solid #79747E; color: var(--muted); background: #FFFFFF; }
+.lst-head .num { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12.5px; font-weight: 700; border: 1.5px solid #79747E; color: var(--muted); background: #FFFFFF; }
 .ttl { font-weight: 650; font-size: 13.5px; }
 .lst-val { font-size: 22px; font-weight: 650; line-height: 1.15; margin-top: 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .lst-val.long { font-size: 15px; }
@@ -154,7 +151,7 @@ td.num { font-variant-numeric: tabular-nums; }
 .card .s { font-size: 11px; color: var(--muted); }
 .card .v.na { color: var(--unk); font-size: 15px; }
 .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
-@media (max-width: 700px) { .charts, .pv, .cp-lists, .cp-row { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .charts, .pv, .cp-row { grid-template-columns: minmax(0, 1fr); } }
 .chart .t { font-size: 12px; font-weight: 600; } .chart .src { font-size: 11px; color: var(--muted); }
 .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
 .legend i { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
@@ -226,7 +223,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
             <button id="btnStep" disabled>Step</button>
           </div>
           <div class="rb-prog"><span>Run progress</span><span id="progTxt">no run</span></div>
-          <div class="bar"><i id="progBar"></i></div>
+          <div class="bar" id="progWrap" role="progressbar" aria-label="Run progress" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"><i id="progBar"></i></div>
           <div class="status" id="status">Loading…</div>
         </div>
       </div>
@@ -336,12 +333,14 @@ function setView(v) {
   $("topoNote").textContent = NOTES[v];
   if (META) drawMap(LAST_MAP);
 }
+let LEGEND_HTML = null; // the iso key last written, so unchanged keys skip the DOM
 function drawMap(state) {
   LAST_MAP = state;
   if (VIEW === "iso" && window.VGCPIso) {
     const last = RUN && RUN.steps.length ? RUN.steps[RUN.steps.length - 1] : null;
-    $("topoLegend").innerHTML = window.VGCPIso.render($("iso"), {topology: META.topology, state, limit: META.max_reserved_fraction,
+    const legend = window.VGCPIso.render($("iso"), {topology: META.topology, state, limit: META.max_reserved_fraction,
       decision: last ? last.decision.badge : null, t: last ? last.t : 0});
+    if (LEGEND_HTML !== legend) { $("topoLegend").innerHTML = LEGEND_HTML = legend; } // the key rarely changes
   } else drawTopo(state);
 }
 $("viewNormal").onclick = () => setView("normal"); $("viewIso").onclick = () => setView("iso");
@@ -451,6 +450,7 @@ function drawTopo(state) {
   });
   svg.innerHTML = s;
   const inst = installed ? SLICES.map((sl) => `<span><i style="background:${SLICE_COLOR[sl]}"></i>${sl.toUpperCase()} → path ${installed.path[sl]}</span>`).join("") : "";
+  LEGEND_HTML = null;
   $("topoLegend").innerHTML = inst + `<span><i style="background:var(--warn)"></i>util &gt; ${META.max_reserved_fraction} (reservation limit)</span>`;
 }
 
@@ -480,18 +480,28 @@ function stageData(step) {
     {v: `t=${step.result.truth.t}`, u: "", s: viol ? "violation" : "no violation", tone: viol ? "bad" : "ok"},
   ];
 }
+let STAGES_FOR; // the step (and controller) the stage cards were last built for
 function renderStages(step, active) {
-  const data = stageData(step), ctrl = RUN?.controller;
-  const subs = STAGES.map(([, sub], i) => i === 4 && ctrl === "shielded-utility" ? "max predicted return (Eq 42), else π₀(s)" : sub);
+  const ctrl = RUN?.controller;
+  if (!STAGES_FOR || STAGES_FOR.step !== step || STAGES_FOR.ctrl !== ctrl) {
+    const data = stageData(step);
+    const subs = STAGES.map(([, sub], i) => i === 4 && ctrl === "shielded-utility" ? "max predicted return (Eq 42), else π₀(s)" : sub);
+    $("stages").innerHTML = STAGES.map(([h], i) => {
+      const x = data[i];
+      return `<li class="lst">
+        <div class="lst-head"><span class="num">${i + 1}</span><span class="ttl">${h}</span></div>
+        <div class="lst-val${x.v.length > 7 ? " long" : ""}">${esc(x.v)}${x.u ? ` <small>${esc(x.u)}</small>` : ""}</div>
+        ${x.s ? `<span class="lst-st ${x.tone}">${esc(x.s)}</span>` : ""}
+        <div class="lst-sub">${esc(subs[i])}</div></li>`;
+    }).join("");
+    STAGES_FOR = {step, ctrl};
+  }
   const state = (i) => !step ? "idle" : active < 0 || i < active ? "done" : i === active ? "active" : "todo";
-  $("stages").innerHTML = STAGES.map(([h], i) => {
-    const x = data[i], st = state(i);
-    return `<li class="lst ${st}"${st === "active" ? ' aria-current="step"' : ""}>
-      <div class="lst-head"><span class="num">${i + 1}</span><span class="ttl">${h}</span></div>
-      <div class="lst-val${x.v.length > 7 ? " long" : ""}">${esc(x.v)}${x.u ? ` <small>${esc(x.u)}</small>` : ""}</div>
-      ${x.s ? `<span class="lst-st ${x.tone}">${esc(x.s)}</span>` : ""}
-      <div class="lst-sub">${esc(subs[i])}</div></li>`;
-  }).join("");
+  [...$("stages").children].forEach((li, i) => {
+    const st = state(i);
+    li.className = `lst ${st}`;
+    if (st === "active") li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+  });
   const fill = !step ? 0 : active < 0 ? 1 : active / (STAGES.length - 1);
   $("loopFill").style.width = `${(100 * fill).toFixed(1)}%`;
   $("loopLive").textContent = step && active >= 0 ? "running" : "";
@@ -692,6 +702,7 @@ function syncButtons() {
   $("runState").textContent = !has ? "IDLE" : done ? "FINISHED" : playing ? "PLAYING" : "ACTIVE";
   $("progTxt").innerHTML = has ? `slot <b>${RUN.steps.length}</b> / ${RUN.slots}` : "no run";
   $("progBar").style.width = has ? `${(100 * RUN.steps.length / RUN.slots).toFixed(1)}%` : "0";
+  $("progWrap").setAttribute("aria-valuemax", String(has ? RUN.slots : 0)); $("progWrap").setAttribute("aria-valuenow", String(has ? RUN.steps.length : 0));
   if (META) syncChoices();
   $("btnPlay").disabled = !has || done || busy && !playing; $("btnStep").disabled = !has || done || playing || busy; $("btnReset").disabled = !has;
   $("btnPlay").textContent = playing ? "⏸ Pause" : "▶ Play";
@@ -734,7 +745,7 @@ async function play() {
 }
 $("btnStart").onclick = start; $("btnStep").onclick = stepOnce; $("btnPlay").onclick = play;
 $("btnReset").onclick = () => { playing = false; RUN = null; start(); };
-$("scenario").onchange = () => { const s = META.scenarios.find((x) => x.name === $("scenario").value); $("scenario").title = s?.description || ""; };
+$("scenario").onchange = () => { const s = META.scenarios.find((x) => x.name === $("scenario").value); $("scenarioBtn").title = s?.description || ""; };
 
 // ------------------------------------------------------------------ saved campaigns
 async function loadHistory() {
