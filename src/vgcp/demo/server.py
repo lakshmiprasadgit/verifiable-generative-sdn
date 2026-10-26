@@ -31,6 +31,7 @@ from vgcp.sim import load_scenario
 
 ROOT = Path(__file__).resolve().parents[3]
 STATIC = Path(__file__).resolve().parent / "static"
+STATIC_FILES = {"/iso.js": ("iso.js", "text/javascript; charset=utf-8")}
 SCENARIOS = ROOT / "experiments" / "scenarios"
 
 
@@ -185,6 +186,9 @@ def make_handler(app: App):
             q = parse_qs(u.query)
             if u.path in ("/", "/index.html"):
                 return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if u.path in STATIC_FILES:  # a fixed allow-list, no path from the request reaches the disk
+                name, ctype = STATIC_FILES[u.path]
+                return self._send(200, (STATIC / name).read_bytes(), ctype)
             if u.path == "/api/meta":
                 return self._guard(app.meta)
             if u.path == "/api/summary":

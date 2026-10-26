@@ -117,6 +117,11 @@ def test_http_api_end_to_end(cfg):
         assert n == r["slots"] == 60
         summ = call(f"/api/summary?run_id={r['run_id']}")
         assert summ["runner"]["slots"] == 60 and summ["demo"]["certified_steps"] + summ["runner"]["fallback_slots"] == 60
+        with urllib.request.urlopen(base + "/iso.js") as r:  # isometric view module, allow-listed
+            assert r.headers["Content-Type"].startswith("text/javascript") and b"VGCPIso" in r.read()
+        with pytest.raises(urllib.error.HTTPError) as e:
+            call("/../src/vgcp/demo/server.py")  # nothing outside the allow-list is served
+        assert e.value.code == 404
         with pytest.raises(urllib.error.HTTPError) as e:
             call("/api/history/item?id=../../etc")
         assert e.value.code == 404

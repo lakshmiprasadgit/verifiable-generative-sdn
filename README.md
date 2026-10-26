@@ -107,8 +107,16 @@ Run `scripts/run_dashboard.sh` and open <http://127.0.0.1:8765/>.
 * *Step* runs one slot; *Play* / *Pause* run continuously at the chosen ms per slot;
   *Reset* restarts the same configuration.
 * Click a candidate row to see its checks.
+* **Normal view | Isometric view** (top right) switches the topology panel between the
+  plain graph and an isometric city: switches are intersections, links are roads
+  (wider = more capacity), URLLC runs as ambulances, eMBB as buses, mMTC as scooters
+  and background traffic as other cars. Overhead signs show each link's
+  utilization; the city gate's traffic light shows the decision (green certified,
+  amber certified fallback or unverified baseline, red uncertified fallback). Vehicle
+  counts follow the rates; their positions are illustrative. Light and dark follow
+  the system setting.
 * *Saved campaigns* shows earlier results, labelled as historical.
-* A link like `/?scenario=s3_background_on_urllc_path&controller=shielded&steps=25`
+* A link like `/?scenario=s3_background_on_urllc_path&controller=shielded&steps=25&view=iso`
   starts a run and steps it automatically.
 
 Live runs use the **simulated** network. The Mininet backend appears only if the

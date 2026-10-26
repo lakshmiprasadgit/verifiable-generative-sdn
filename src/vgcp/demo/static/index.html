@@ -37,6 +37,11 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button:disabled { opacity: .45; cursor: not-allowed; }
 .tabs { display: flex; gap: 4px; margin-left: auto; }
 .tabs button.active { border-color: var(--accent); color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; min-height: 32px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+#iso { display: block; background: #EEF2F5; border-radius: 8px; }
 main { padding: 14px 16px 40px; max-width: 1500px; margin: 0 auto; }
 .grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 14px; }
 @media (max-width: 1050px) { .grid { grid-template-columns: minmax(0, 1fr); } }
@@ -107,7 +112,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
     <h1>Verifiable Generative Control Plane — control-loop demo</h1>
     <span class="sub">Stage 1 research prototype · heuristic candidates, analytic nominal model · not a safety guarantee</span>
     <div class="tabs"><button id="tabLive" class="active">Live run</button><button id="tabHist">Saved campaigns</button>
-      <button id="theme" title="Toggle light/dark">◐</button></div>
+      <div class="seg" role="group" aria-label="Map view"><button id="viewNormal" aria-pressed="true">Normal view</button><button id="viewIso" aria-pressed="false">Isometric view</button></div></div>
   </div>
   <div class="controls" id="liveControls">
     <label>Scenario<select id="scenario"></select></label>
@@ -130,8 +135,9 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
       <div class="panel">
         <h2>Network topology <span class="tag" id="topoSrc">configs/network.yaml</span></h2>
         <svg id="topo" viewBox="0 0 640 300" width="100%" role="img" aria-label="Network topology"></svg>
+        <svg id="iso" class="hidden" width="100%" role="img" aria-label="Isometric city view of the network: switches as intersections, links as roads, slices as vehicles"></svg>
         <div class="legend" id="topoLegend"></div>
-        <p class="note">Link colour and label: utilization in the slot just observed (simulator ground truth, or measured on Mininet).
+        <p class="note" id="topoNote">Link colour and label: utilization in the slot just observed (simulator ground truth, or measured on Mininet).
           Dashed grey = link powered off. Coloured lines = the path each slice is installed on.</p>
       </div>
       <div class="panel">
@@ -181,6 +187,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
 </section>
 </main>
 
+<script src="/iso.js"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -205,13 +212,30 @@ async function api(path, body) {
 }
 function setStatus(html) { $("status").innerHTML = html; }
 
-// ------------------------------------------------------------------ theme and tabs
-(() => { try { const t = localStorage.getItem("vgcp-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {} })();
-$("theme").onclick = () => {
-  const dark = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.dataset.theme = dark ? "light" : "dark";
-  try { localStorage.setItem("vgcp-theme", document.documentElement.dataset.theme); } catch (e) {}
+// ------------------------------------------------------------------ map view (light/dark follows the system setting)
+const NOTES = {
+  normal: "Link colour and label: utilization in the slot just observed (simulator ground truth, or measured on Mininet). Dashed grey = link powered off. Coloured lines = the path each slice is installed on.",
+  iso: "Isometric city: switches are intersections, links are roads (wider road = more capacity), slices are vehicles on their installed path. Values are those of the slot just observed (simulator ground truth, or measured on Mininet).",
 };
+let VIEW = "normal", LAST_MAP = null;
+(() => { try { const v = localStorage.getItem("vgcp-view"); if (v === "iso" || v === "normal") VIEW = v; } catch (e) {} })();
+function setView(v) {
+  VIEW = v;
+  try { localStorage.setItem("vgcp-view", v); } catch (e) {}
+  $("viewNormal").setAttribute("aria-pressed", String(v === "normal")); $("viewIso").setAttribute("aria-pressed", String(v === "iso"));
+  $("topo").classList.toggle("hidden", v !== "normal"); $("iso").classList.toggle("hidden", v !== "iso");
+  $("topoNote").textContent = NOTES[v];
+  if (META) drawMap(LAST_MAP);
+}
+function drawMap(state) {
+  LAST_MAP = state;
+  if (VIEW === "iso" && window.VGCPIso) {
+    const last = RUN && RUN.steps.length ? RUN.steps[RUN.steps.length - 1] : null;
+    $("topoLegend").innerHTML = window.VGCPIso.render($("iso"), {topology: META.topology, state, limit: META.max_reserved_fraction,
+      decision: last ? last.decision.badge : null, t: last ? last.t : 0});
+  } else drawTopo(state);
+}
+$("viewNormal").onclick = () => setView("normal"); $("viewIso").onclick = () => setView("iso");
 $("tabLive").onclick = () => { $("live").classList.remove("hidden"); $("hist").classList.add("hidden"); $("liveControls").classList.remove("hidden");
   $("tabLive").classList.add("active"); $("tabHist").classList.remove("active"); };
 $("tabHist").onclick = () => { $("hist").classList.remove("hidden"); $("live").classList.add("hidden"); $("liveControls").classList.add("hidden");
@@ -500,7 +524,7 @@ async function start() {
     $("summaryPanel").classList.add("hidden"); $("timeline").innerHTML = '<p class="note">No events yet.</p>';
     $("candidates").innerHTML = '<p class="note">No step yet.</p>'; $("decision").innerHTML = '<p class="note">Press Step or Play.</p>';
     $("observation").innerHTML = '<p class="note">No observation yet.</p>'; $("cards").innerHTML = ""; $("charts").innerHTML = "";
-    $("slotNo").textContent = "–"; drawTopo(r.initial); renderStages(null, -1);
+    $("slotNo").textContent = "–"; drawMap(r.initial); renderStages(null, -1);
   } catch (e) { setStatus(`<span class="err">${esc(e.message)}</span>`); RUN = null; }
   busy = false; syncButtons();
 }
@@ -512,7 +536,7 @@ async function stepOnce() {
     if (s.done && !s.t && s.t !== 0) { busy = false; return false; }
     RUN.steps.push(s);
     $("slotNo").textContent = `t=${s.t}`;
-    drawTopo(s.result.truth); renderDecision(s); renderCandidates(s); renderMetrics(s); renderObservation(s); renderTimeline();
+    drawMap(s.result.truth); renderDecision(s); renderCandidates(s); renderMetrics(s); renderObservation(s); renderTimeline();
     await animateStages(s);
     if (s.done) { playing = false; await renderSummary(); }
   } catch (e) { setStatus(`<span class="err">${esc(e.message)}</span>`); playing = false; busy = false; syncButtons(); return false; }
@@ -572,7 +596,7 @@ async function showHistory() {
 (async () => {
   try {
     META = await api("/api/meta");
-    layout(); drawTopo(null); renderStages(null, -1);
+    layout(); setView(new URLSearchParams(location.search).get("view") === "iso" ? "iso" : VIEW); renderStages(null, -1);
     $("scenario").innerHTML = META.scenarios.map((s) => `<option value="${esc(s.name)}" title="${esc(s.description)}">${esc(s.name)} (${s.slots} slots)</option>`).join("");
     $("scenario").value = "s3_background_on_urllc_path"; $("scenario").onchange();
     $("controller").innerHTML = META.controllers.map((c) => `<option>${esc(c)}</option>`).join("");
