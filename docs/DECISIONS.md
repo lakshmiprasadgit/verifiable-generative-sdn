@@ -450,3 +450,22 @@ and the latency factor can only be fitted once a slot's latency is a real p99.
   latency` compares an idle path with and without those reads. Until that is
   resolved, Mininet latency violations on lightly loaded paths are not attributable
   to the controller, and the k fit inherits them.
+* **Meter: cause confirmed, fixed and modelled** (`meter-sweep-20261026T171710Z`).
+  Left alone, the meter passed 0.998-1.000x its budget at every burst size;
+  modified every slot by ±0.1 %, it passed 1.005x (burst 0.01 s), 1.066x (0.1 s, the
+  setting used until now, matching the campaign's 1.068x) and 1.50x (1 s, capped by
+  the offered 1.5x). Each modification refills the token bucket.
+  *Chosen* (team, 2026-10-26): program meters with a 0.01 s burst
+  (`openflow.METER_BURST_S`), and model what remains as
+  `network.control.meter_overshoot` ε = 0.01: the capacity constraint counts
+  Σ budget × (1 + ε), T̂ lets a policed slice pass budget × (1 + ε), and π₀(s) and the
+  capacity-fitted heuristic leave the same room. The simulator's meter stays exact,
+  so in simulation ε only makes the shield 1 % more conservative.
+  *Rejected:* keeping the 0.1 s burst and modelling ε = 0.12 (reserves 12 % extra
+  for every metered slice), and skipping small modifications (the installed budget
+  would then differ from the certified one).
+* **Latency spikes: not the counter reads** (`meter-sweep-20261026T171934Z`). On an
+  idle path A, 100 pings per slot gave a slot p99 of 0.49 ms median and at most
+  0.98 ms, with or without the per-slot counter reads (0 of 20 slots over 1 ms
+  each). The campaign's spikes therefore need its traffic or its host load; the
+  cause is open.

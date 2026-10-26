@@ -5,6 +5,12 @@
 
 control:
   delta_t_s: 1.0            # duration of one control slot (paper Sec 2.1: slotted time)
+  # A metered slice can pass up to budget * (1 + meter_overshoot) in a slot. Measured on
+  # Open vSwitch (DECISIONS 2026-10-26): a meter is exact when left alone, but each
+  # modification refills its token bucket; with the 0.01 s burst the backend programs,
+  # a modified meter passed 1.004-1.008x its budget. The capacity constraint, the
+  # nominal model, pi_0(s) and the capacity-fitted heuristic all count it.
+  meter_overshoot: 0.01
 
 topology:
   ingress: s1

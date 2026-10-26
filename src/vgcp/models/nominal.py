@@ -87,10 +87,12 @@ class NominalModelParams:
 
 
 class AnalyticNominalModel:
-    def __init__(self, topology: Topology, slice_names: Sequence[str], params: NominalModelParams) -> None:
+    def __init__(self, topology: Topology, slice_names: Sequence[str], params: NominalModelParams,
+                 meter_overshoot: float = 0.0) -> None:
         self.topology = topology
         self.slices = tuple(slice_names)
         self.params = params
+        self.meter_overshoot = meter_overshoot  # a metered slice passes up to budget * (1 + this)
 
     def required_state_keys(self) -> frozenset[str]:
         return frozenset(
@@ -124,7 +126,7 @@ class AnalyticNominalModel:
                 load[s] = math.nan
                 continue
             frac = 1.0 if devices <= 0 else min(1.0, action.admission_limit[s] / devices)
-            load[s] = min(frac * offered, float(action.rate_budget_mbps[s]))
+            load[s] = min(frac * offered, float(action.rate_budget_mbps[s]) * (1.0 + self.meter_overshoot))
 
         route = {s: topo.paths[action.path[s]].links for s in self.slices}
         util: dict[str, float] = {}

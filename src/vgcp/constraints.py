@@ -8,7 +8,8 @@ evaluates to None (unknown) - never to "satisfied".
 
 Families (all configured in configs/constraints.yaml):
 
-link_capacity.<link>   sum of rate budgets of slices routed over the link
+link_capacity.<link>   sum of rate budgets of slices routed over the link, each times
+                       (1 + meter_overshoot): what a metered slice can actually pass
                        + measured background load on the link (traffic outside
                        the managed slices, audit H1)
                        - max_reserved_fraction * capacity                     [Mbit/s]
@@ -133,8 +134,10 @@ class ConstraintConfig:
 
 
 class HardConstraints:
-    def __init__(self, cfg: ConstraintConfig, topology: Topology, slices: Sequence[SliceSpec]) -> None:
+    def __init__(self, cfg: ConstraintConfig, topology: Topology, slices: Sequence[SliceSpec],
+                 meter_overshoot: float = 0.0) -> None:
         self.cfg = cfg
+        self.meter_overshoot = meter_overshoot
         self.topology = topology
         self.slices = {s.name: s for s in slices}
 
@@ -172,7 +175,7 @@ class HardConstraints:
         if self.cfg.link_capacity:
             for lid, link in topo.links.items():
                 users = [s for s in self.slices if lid in route_links[s]]
-                reserved = sum(float(action.rate_budget_mbps[s]) for s in users)
+                reserved = sum(float(action.rate_budget_mbps[s]) for s in users) * (1.0 + self.meter_overshoot)
                 background = state.value(f"background_load_mbps.{lid}")
                 limit = self.cfg.max_reserved_fraction * link.capacity_mbps
                 if math.isnan(background):

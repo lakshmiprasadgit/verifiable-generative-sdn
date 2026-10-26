@@ -87,7 +87,7 @@ def test_cookies_separate_classes(cfg):
 
 
 def test_meter_spec():
-    assert meter_spec(2, 5.0) == "meter=2,kbps,burst,band=type=drop,rate=5000,burst_size=500"
+    assert meter_spec(2, 5.0) == "meter=2,kbps,burst,band=type=drop,rate=5000,burst_size=50"  # 0.01 s
 
 
 @pytest.mark.skipif(shutil.which("ovs-ofctl") is None, reason="ovs-ofctl not installed")

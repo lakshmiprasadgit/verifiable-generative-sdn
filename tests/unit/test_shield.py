@@ -74,7 +74,8 @@ def test_rejects_capacity_violation(cfg, shield):
     cert = shield.verify(nominal_state(cfg), nominal_demand(), action_with(cfg, path={"embb": "A"}), NOW)
     assert not cert.accepted
     assert status(cert, "hard_constraints_now") is CheckStatus.FAIL
-    assert cert.constraints_now["link_capacity.l12"] == pytest.approx(60.0)
+    # urllc 5 + embb 100 on l12, each counted with the meter overshoot (1 %), vs 0.9 * 50
+    assert cert.constraints_now["link_capacity.l12"] == pytest.approx((5 + 100) * (1 + cfg.meter_overshoot) - 45)
 
 
 def test_rejects_route_over_powered_off_link(cfg, shield):

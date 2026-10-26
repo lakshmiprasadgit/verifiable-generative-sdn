@@ -140,7 +140,8 @@ class Certificate:
 def fallback_policy(config: ProjectConfig) -> FallbackPolicy:
     if config.shield.fallback_policy == "capacity_aware":
         return CapacityAwareFallbackPolicy(config.fallback_action, config.topology, config.slices,
-                                           config.constraints.max_reserved_fraction)
+                                           config.constraints.max_reserved_fraction,
+                                           meter_overshoot=config.meter_overshoot)
     return StaticFallbackPolicy(config.fallback_action)
 
 
@@ -212,10 +213,10 @@ class VerificationShield:
         names = [s.name for s in config.slices]
         return cls(
             config,
-            AnalyticNominalModel(config.topology, names, config.nominal_model),
+            AnalyticNominalModel(config.topology, names, config.nominal_model, config.meter_overshoot),
             fallback_policy(config),
             UpperBoundConstantForecast(config.demand_schema, config.shield.forecast_margin),
-            HardConstraints(config.constraints, config.topology, config.slices),
+            HardConstraints(config.constraints, config.topology, config.slices, config.meter_overshoot),
         )
 
     # ---------------------------------------------------------------- public

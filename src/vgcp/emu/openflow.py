@@ -82,9 +82,12 @@ def background_rules(plan: EmulationPlan, nodes: tuple[str, ...], classes: list[
     return path_rules(plan, BACKGROUND, nodes, class_cookie(classes, BACKGROUND), BACKGROUND_PRIORITY, None)
 
 
+METER_BURST_S = 0.01  # each meter modification refills the bucket: a burst of B s passes about B s extra (DECISIONS 2026-10-26)
+
+
 def meter_spec(meter: int, mbps: float) -> str:
     kbps = max(1, int(round(mbps * 1000)))
-    return f"meter={meter},kbps,burst,band=type=drop,rate={kbps},burst_size={max(1, kbps // 10)}"
+    return f"meter={meter},kbps,burst,band=type=drop,rate={kbps},burst_size={max(1, int(kbps * METER_BURST_S))}"
 
 
 # ---------------------------------------------------------------- counter parsing

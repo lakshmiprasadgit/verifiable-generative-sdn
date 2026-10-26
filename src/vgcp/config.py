@@ -54,6 +54,7 @@ class ProjectConfig:
     source: str
     config_hash: str
     delta_t_s: float
+    meter_overshoot: float  # epsilon: a metered slice may pass budget * (1 + epsilon) in a slot (DECISIONS 2026-10-26)
     topology: Topology
     slices: tuple[SliceSpec, ...]
     state_schema: ObservationSchema
@@ -177,7 +178,7 @@ _STR = "string"  # leaf that must be a string (identifiers, labels)
 
 _SCHEMA = _Obj({
     "network": _Obj({
-        "control": _Obj({"delta_t_s": None}),
+        "control": _Obj({"delta_t_s": None, "meter_overshoot": None}),  # meter_overshoot optional, default 0
         "topology": _Obj({
             "ingress": _STR,
             "egress": _STR,
@@ -282,6 +283,9 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
 
     delta_t = _num(_get(_get(net, "control", "network"), "delta_t_s", "network.control"),
                    "network.control.delta_t_s", lo=0.0, lo_open=True)
+    meter_eps = _num(net["control"].get("meter_overshoot", 0.0), "network.control.meter_overshoot", lo=0.0)
+    if meter_eps >= 1.0:
+        raise ConfigError("network.control.meter_overshoot must be < 1 (a fraction of the budget)")
 
     # --- topology
     traw = _get(net, "topology", "network")
@@ -422,7 +426,7 @@ def build_config(raw: Mapping[str, Any], source: str = "<memory>") -> ProjectCon
         raise ConfigError("shield.fallback_action is not in the action set A: " + "; ".join(errors))
 
     return ProjectConfig(
-        source=source, config_hash=config_hash(raw), delta_t_s=delta_t, topology=topology,
+        source=source, config_hash=config_hash(raw), delta_t_s=delta_t, meter_overshoot=meter_eps, topology=topology,
         slices=tuple(slices), state_schema=state_schema, demand_schema=demand_schema,
         action_schema=action_schema, constraints=constraints, horizon_H=H, rho_min=rho_min,
         intents=tuple(intents), shield=settings, nominal_model=nominal,

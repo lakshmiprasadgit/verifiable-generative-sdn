@@ -15,9 +15,9 @@ def test_grid_keeps_small_frames_at_rates_iperf3_can_generate():
     assert {p["burst_fraction"] for p in pts} == {0.01, 0.1, 1.0}
 
 
-def test_spec_matches_the_backend_meter_at_the_default_burst():
+def test_spec_matches_the_backend_meter_burst():
     from vgcp.emu.openflow import meter_spec
-    assert spec(50.0, 0.1) == meter_spec(1, 50.0)
+    assert spec(50.0, 0.01) == meter_spec(1, 50.0)
 
 
 def test_report_marks_points_where_the_offered_load_did_not_exceed_the_budget():

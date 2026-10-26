@@ -63,7 +63,7 @@ def test_capacity_aware_continuation_makes_a_fitting_candidate_certifiable():
     # Under 120 Mbit/s background on B, the static pi_0 (eMBB 100 on B) breaks capacity
     # along the rollout, so no candidate can be certified. With pi_0(s) the continuation
     # fits, and a candidate that fits is certified.
-    fitted = lambda c: action_with(c, rate_budget_mbps={"embb": 60.0})
+    fitted = lambda c: action_with(c, rate_budget_mbps={"embb": 59.0})  # 59 * 1.01 fits the 60 left on B
     static = config_with(lambda r: r["shield"].update(fallback_policy="static"))
     aware = config_with(lambda r: r["shield"].update(fallback_policy="capacity_aware"))
     for c, expected in ((static, False), (aware, True)):

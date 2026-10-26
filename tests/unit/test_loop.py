@@ -154,11 +154,12 @@ def test_candidates_are_in_A_and_deterministic(cfg):
 
 def test_capacity_fitted_shrinks_embb_to_measured_headroom(cfg):
     # 120 Mbit/s background on path B: 0.9 * 200 - 120 = 60 Mbit/s left for eMBB there,
-    # path C has 0.9 * 50 - mMTC budget left; the larger room wins.
+    # path C has 0.9 * 50 - mMTC budget left; the larger room wins. The budget leaves room
+    # for the meter overshoot: budget * (1 + 0.01) = 60.
     obs = _obs(cfg, **{"background_load_mbps.l13": 120.0, "background_load_mbps.l35": 120.0})
     fitted = next(c for c in HeuristicCandidateGenerator(cfg, n_random=0).propose(obs) if c.label == "capacity-fitted")
     assert fitted.action.path["embb"] == "B"
-    assert fitted.action.rate_budget_mbps["embb"] == pytest.approx(60.0)
+    assert fitted.action.rate_budget_mbps["embb"] == pytest.approx(60.0 / (1 + cfg.meter_overshoot))
 
 
 def test_fitted_first_preference(cfg):

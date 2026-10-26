@@ -37,8 +37,9 @@ class StaticFallbackPolicy:
 
 class CapacityAwareFallbackPolicy:
     def __init__(self, base: ControlAction, topology: Topology, slices: Sequence[SliceSpec],
-                 max_reserved_fraction: float, elastic_slice: str = "embb") -> None:
+                 max_reserved_fraction: float, elastic_slice: str = "embb", meter_overshoot: float = 0.0) -> None:
         self.base, self.topo, self.frac = base, topology, max_reserved_fraction
+        self.k = 1.0 + meter_overshoot  # reserved capacity per Mbit/s of budget
         self.slices = {s.name: s for s in slices}
         if elastic_slice not in self.slices:
             raise ValueError(f"unknown elastic slice {elastic_slice!r}")
@@ -53,17 +54,17 @@ class CapacityAwareFallbackPolicy:
         def room(pid: str) -> float:
             return min(
                 self.frac * self.topo.links[lid].capacity_mbps - bg[lid]
-                - sum(b for s, b in fixed.items() if lid in self.topo.paths[self.base.path[s]].links)
+                - self.k * sum(b for s, b in fixed.items() if lid in self.topo.paths[self.base.path[s]].links)
                 for lid in self.topo.paths[pid].links
             )
 
         want = float(self.base.rate_budget_mbps[self.elastic])
-        if room(self.base.path[self.elastic]) >= want:
+        if room(self.base.path[self.elastic]) >= self.k * want:
             return self.base  # the static choice still fits: unchanged
         rooms = {pid: room(pid) for pid in self.slices[self.elastic].allowed_paths}
         best_path = max(rooms, key=lambda p: (rooms[p], -self.slices[self.elastic].allowed_paths.index(p)))
         lo, hi = self.slices[self.elastic].rate_budget_mbps
-        budget = min(want, rooms[best_path])
+        budget = min(want, rooms[best_path] / self.k)
         d = self.base.to_dict()
         d["path"][self.elastic] = best_path
         d["rate_budget_mbps"][self.elastic] = min(max(budget, lo), hi)

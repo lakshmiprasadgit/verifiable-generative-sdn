@@ -74,20 +74,20 @@ class HeuristicCandidateGenerator:
         # Capacity-fitted: put eMBB on the allowed path with the most remaining reservable
         # capacity (f_max * C - measured background - other slices' budgets) and shrink
         # its budget to fit - a conventional congestion response.
-        frac = self.cfg.constraints.max_reserved_fraction
+        frac, k = self.cfg.constraints.max_reserved_fraction, 1.0 + self.cfg.meter_overshoot
         others = {s: matched[s] for s in self.slices if s != "embb"}
         fit_path, fit_room = self.fallback.path["embb"], -float("inf")
         for pid in self.slices["embb"].allowed_paths:
             room = min(
                 frac * topo.links[lid].capacity_mbps
                 - _unknown_full(obs.state.value(f"background_load_mbps.{lid}"))
-                - sum(b for s, b in others.items() if lid in topo.paths[self.fallback.path[s]].links)
+                - k * sum(b for s, b in others.items() if lid in topo.paths[self.fallback.path[s]].links)
                 for lid in topo.paths[pid].links
             )
             if room > fit_room:
                 fit_path, fit_room = pid, room
         out.append(Candidate("capacity-fitted", self._make(
-            {"embb": fit_path}, {**matched, "embb": min(matched["embb"], fit_room)})))  # -inf room clips to the minimum
+            {"embb": fit_path}, {**matched, "embb": min(matched["embb"], fit_room / k)})))  # -inf room clips to the minimum
         # Background-aware: move eMBB to the allowed path with the most measured headroom.
         best_path, best_room = self.fallback.path["embb"], -float("inf")
         for pid in self.slices["embb"].allowed_paths:
