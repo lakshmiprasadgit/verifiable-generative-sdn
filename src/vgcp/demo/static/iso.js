@@ -68,6 +68,22 @@
     return s;
   }
 
+  // ---------------------------------------------------------------- road paint
+  // Text lying flat in the ground plane: its x runs along world +x, its y along world
+  // +y, both at true length (the isometric axes keep unit scale), like road markings.
+  function groundText(x, y, text, size, dy) {
+    const [tx, ty] = P(x, y, 0);
+    return `<text transform="matrix(${C30.toFixed(4)},0.5,${(-C30).toFixed(4)},0.5,${r1(tx)},${r1(ty)})" y="${dy}" text-anchor="middle" dominant-baseline="central"`
+      + ` style="fill:#F4F5F6;font-family:system-ui,sans-serif;font-size:${size}px;font-weight:800;letter-spacing:0.5px">${esc(text)}</text>`;
+  }
+  // A switch's name painted on its intersection, inside a box-junction outline.
+  function paintNode(x, y, h, name, sub) {
+    const m = h - 0.1;
+    return poly([[x - m, y - m, 0], [x + m, y - m, 0], [x + m, y + m, 0], [x - m, y + m, 0]], "none",
+      'style="fill:none;stroke:#F4F5F6;stroke-width:1.1;stroke-opacity:0.8"')
+      + groundText(x, y, name.toUpperCase(), 12.5, sub ? -2.5 : 0) + (sub ? groundText(x, y, sub, 6.2, 7.5) : "");
+  }
+
   // ---------------------------------------------------------------- assets
   const GLASS = "#F2E3A6", CABIN = "#C7DBEA";
   function vehicleBox(x, y, along, L, W) {
@@ -278,8 +294,12 @@
     };
     const place = (pl, n, lane, phase, draw) => {
       const L = polyLen(pl), lo = 0.7, hi = L - 0.7;
+      // never stop on an intersection: its painted name stays readable
+      const onPlaza = (x, y) => Object.keys(node).some((m) => Math.abs(x - node[m][0]) < half[m] + 0.4 && Math.abs(y - node[m][1]) < half[m] + 0.4);
       for (let i = 0; i < n; i++) {
-        const s = lo + ((i + phase) / n % 1) * (hi - lo), [x, y, along] = pointAt(pl, s);
+        let s = lo + ((i + phase) / n % 1) * (hi - lo), [x, y, along] = pointAt(pl, s);
+        for (let k = 0; k < 4 && onPlaza(x, y); k++) { s = lo + ((s - lo + 0.5) % (hi - lo)); [x, y, along] = pointAt(pl, s); }
+        if (onPlaza(x, y)) continue;
         const [vx, vy] = along === "x" ? [x, y + lane] : [x + lane, y];
         add(vx + vy, draw(vx, vy, along, i));
       }
@@ -329,13 +349,12 @@
                    "UNCERTIFIED FALLBACK": "red", "NOT APPLIED": "red"}[opts.decision] || null;
     { const [x, y] = node[T.ingress], h = half[T.ingress]; add(x + y - 2 * h, Asset.trafficLight(x - h - 0.12, y - h - 0.12, light)); }
 
-    // labels (flat text, on top)
+    // switch names painted on their intersections (ground layer: vehicles pass over paint)
     for (const n of Object.keys(node)) {
-      const [x, y] = node[n], h = half[n];
-      const name = n === T.ingress ? `${n} · gate` : n === T.egress ? `${n} · hub` : n;
-      const [tx, ty] = P(x + h, y + h, 0);
-      labels.push(`<text x="${r1(tx)}" y="${r1(ty + 13)}" text-anchor="middle" font-size="10.5" font-weight="700" style="fill:#1C1F24;stroke:#FFFFFF;stroke-width:3px;paint-order:stroke">${esc(name)}</text>`);
+      const [x, y] = node[n];
+      marks.push(paintNode(x, y, half[n], n, n === T.ingress ? "GATE" : n === T.egress ? "HUB" : ""));
     }
+    // path names (flat text, on top)
     for (const pid of Object.keys(T.paths)) { // beside the path's middle switch, off the road
       const ns = T.paths[pid].nodes, m = ns[Math.floor(ns.length / 2)], [x, y] = node[m], h = half[m];
       const [tx, ty] = P(x - h - 0.9, y - h - 0.25, 0);
@@ -376,7 +395,7 @@
   function plaza() {
     let s = flat(-0.7, -0.7, 1.4, 1.4, "#E3E6E9") + flat(-0.5, -0.5, 1.0, 1.0, "#4A5059");
     for (let v = -0.42; v < 0.4; v += 0.13) s += flat(0.52, v, 0.24, 0.065, "#F4F5F6") + flat(v, 0.52, 0.065, 0.24, "#F4F5F6");
-    return s;
+    return s + paintNode(0, 0, 0.5, "s1", "GATE");
   }
   function legend(T, limit, light) {
     const [roadArt, lo, hi] = roads(T);
@@ -390,7 +409,7 @@
       + entry(Asset.scooter(0, 0, "x", "#2E8B57"), "Scooter · mMTC", "many small devices")
       + entry(Asset.car(0, 0, "x", "#9AA1AB") + Asset.car(0.9, 0.45, "x", "#C9524A"), "Other cars · background", "traffic the controller does not manage")
       + entry(roadArt, "Road · link", `wider road = more capacity (${hi} vs ${lo} Mb/s)`)
-      + entry(plaza(), "Intersection · switch", `${esc(T.ingress)} gate = ingress, ${esc(T.egress)} hub = egress`)
+      + entry(plaza(), "Intersection · switch", `name painted on the road; ${esc(T.ingress)} gate = ingress, ${esc(T.egress)} hub = egress`)
       + entry(signs, "Overhead sign · utilization", `green within the ${limit} limit · amber over it · red over capacity`)
       + entry(Asset.trafficLight(0, 0, light), "Gate light · decision", `${now}. Red also means not shown safe.`)
       + `</div>`;
