@@ -5,72 +5,97 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VGCP Control Loop</title>
 <style>
-:root {
-  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5f6b7a; --line: #d9dee5; --soft: #eef1f5;
-  --accent: #2f6fdb; --ok: #1f8a4c; --okbg: #e3f4ea; --bad: #c0362c; --badbg: #fbe7e5; --warn: #a86400; --warnbg: #fdf0db;
-  --unk: #6b5bb5; --unkbg: #eeeafb; --urllc: #d9480f; --embb: #1971c2; --mmtc: #2b8a3e; --bgtraffic: #868e96;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #111418; --panel: #1a1e24; --ink: #e6e9ee; --muted: #9aa5b4; --line: #2f3640; --soft: #222831;
-    --accent: #6ea0ff; --ok: #4cc27f; --okbg: #17301f; --bad: #ff6b5e; --badbg: #3a1c1a; --warn: #f0a33a; --warnbg: #3a2a12;
-    --unk: #a598f0; --unkbg: #26223d; --urllc: #ff8a4c; --embb: #5aa9ff; --mmtc: #5fd27a; --bgtraffic: #aab3bd;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #111418; --panel: #1a1e24; --ink: #e6e9ee; --muted: #9aa5b4; --line: #2f3640; --soft: #222831;
-  --accent: #6ea0ff; --ok: #4cc27f; --okbg: #17301f; --bad: #ff6b5e; --badbg: #3a1c1a; --warn: #f0a33a; --warnbg: #3a2a12;
-  --unk: #a598f0; --unkbg: #26223d; --urllc: #ff8a4c; --embb: #5aa9ff; --mmtc: #5fd27a; --bgtraffic: #aab3bd;
-}
+:root { --bg: #F6F4FA; --panel: #FFFFFF; --ink: #1C1B1F; --muted: #5D5869; --line: #E1DCEA; --soft: #F3F0F9; --accent: #6750A4; --accent-soft: #EADDFF; --ok: #1f8a4c; --okbg: #e3f4ea; --bad: #c0362c; --badbg: #fbe7e5; --warn: #a86400; --warnbg: #fdf0db; --unk: #6b5bb5; --unkbg: #eeeafb; --urllc: #d9480f; --embb: #1971c2; --mmtc: #2b8a3e; --bgtraffic: #868e96; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141218; --panel: #1D1B20; --ink: #E6E0E9; --muted: #B4ADC0; --line: #3A3542; --soft: #27242C; --accent: #D0BCFF; --accent-soft: #4F378B; --ok: #63d394; --okbg: #17301f; --bad: #ff8a80; --badbg: #3a1c1a; --warn: #f0b04a; --warnbg: #3a2a12; --unk: #b8a8ff; --unkbg: #2a2540; --urllc: #ff8a4c; --embb: #5aa9ff; --mmtc: #5fd27a; --bgtraffic: #aab3bd; } }
+:root[data-theme="dark"] { --bg: #141218; --panel: #1D1B20; --ink: #E6E0E9; --muted: #B4ADC0; --line: #3A3542; --soft: #27242C; --accent: #D0BCFF; --accent-soft: #4F378B; --ok: #63d394; --okbg: #17301f; --bad: #ff8a80; --badbg: #3a1c1a; --warn: #f0b04a; --warnbg: #3a2a12; --unk: #b8a8ff; --unkbg: #2a2540; --urllc: #ff8a4c; --embb: #5aa9ff; --mmtc: #5fd27a; --bgtraffic: #aab3bd; }
+/* the hero (map + control panel) is always light, like the isometric scene; the loop card is always dark */
+.hero, .cpanel { --bg: #F6F4FA; --panel: #FFFFFF; --ink: #1C1B1F; --muted: #5D5869; --line: #E1DCEA; --soft: #F3F0F9; --accent: #6750A4; --accent-soft: #EADDFF; --ok: #1f8a4c; --okbg: #e3f4ea; --bad: #c0362c; --badbg: #fbe7e5; --warn: #a86400; --warnbg: #fdf0db; --unk: #6b5bb5; --unkbg: #eeeafb; --urllc: #d9480f; --embb: #1971c2; --mmtc: #2b8a3e; --bgtraffic: #868e96; }
+.loopcard { --bg: #141218; --panel: #1D1B20; --ink: #E6E0E9; --muted: #B4ADC0; --line: #3A3542; --soft: #27242C; --accent: #D0BCFF; --accent-soft: #4F378B; --ok: #63d394; --okbg: #17301f; --bad: #ff8a80; --badbg: #3a1c1a; --warn: #f0b04a; --warnbg: #3a2a12; --unk: #b8a8ff; --unkbg: #2a2540; --urllc: #ff8a4c; --embb: #5aa9ff; --mmtc: #5fd27a; --bgtraffic: #aab3bd; }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; }
-.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.brand h1 { font-size: 17px; margin: 0; }
-.brand .sub { color: var(--muted); font-size: 12.5px; }
-.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-top: 8px; }
-.controls label { display: flex; flex-direction: column; font-size: 11.5px; color: var(--muted); gap: 2px; }
-select, input, button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
-input[type=number] { width: 64px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 16px 20px 6px; max-width: 1560px; margin: 0 auto; }
+.top .titles { margin-right: auto; display: flex; flex-direction: column; gap: 2px; }
+.top h1 { font-size: 19px; margin: 0; letter-spacing: .01em; }
+.top .sub { color: var(--muted); font-size: 12.5px; }
+select, input, button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }
 button { cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button:disabled { opacity: .45; cursor: not-allowed; }
-.tabs { display: flex; gap: 4px; margin-left: auto; }
-.tabs button.active { border-color: var(--accent); color: var(--accent); }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { border: 0; border-radius: 0; min-height: 32px; }
-.seg button + button { border-left: 1px solid var(--line); }
-.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-#iso { display: block; background: #FBFBFE; border-radius: 8px; }
+.seg { display: inline-flex; padding: 3px; gap: 3px; border: 1px solid var(--line); border-radius: 99px; background: var(--panel); }
+.seg button { border: 0; border-radius: 99px; min-height: 34px; padding: 4px 14px; background: transparent; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); font-weight: 600; }
+main { padding: 8px 20px 40px; max-width: 1560px; margin: 0 auto; }
+/* hero: the map with the control panel on its right */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; align-items: start; background: #FBFBFE; color: var(--ink); border: 1px solid #E1DCEA; border-radius: 18px; padding: 16px; }
+@media (max-width: 1150px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+.hero-map { min-width: 0; align-self: stretch; display: flex; flex-direction: column; }
+.hero-map > svg { margin: auto 0; }
+.hero-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+#iso { display: block; }
+.cpanel { background: #FEF7FF; color: var(--ink); border: 2px solid #1C1B1F; border-radius: 22px; box-shadow: 5px 5px 0 #1C1B1F; overflow: hidden; }
+.cp-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+.cp-tabs button { border: 0; border-radius: 0; background: transparent; padding: 14px 8px 11px; color: var(--muted); border-bottom: 3px solid transparent; }
+.cp-tabs button.active { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.cp-body { padding: 14px 18px 18px; }
+.cp-h { font-weight: 650; margin: 0 0 10px; }
+.cp-lists { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; }
+fieldset.choice { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.choice legend { font-size: 11.5px; color: var(--muted); padding: 0 0 4px; }
+.clist { display: flex; flex-direction: column; gap: 4px; }
+.crow { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) 20px; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border-radius: 12px; background: #FFFFFF; border: 1px solid var(--line); cursor: pointer; font-size: 12.5px; line-height: 1.3; overflow-wrap: anywhere; }
+.crow .cid { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.crow input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.crow .tick { width: 18px; height: 18px; border: 2px solid #49454F; border-radius: 3px; display: grid; place-items: center; }
+.crow input:checked + .tick { background: var(--accent); border-color: var(--accent); }
+.crow input:checked + .tick::after { content: ""; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
+.crow:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); }
+.crow:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cp-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.field { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); background: #ECE6F0; border-bottom: 1px solid #49454F; border-radius: 6px 6px 0 0; padding: 6px 8px 4px; }
+.field select, .field input { border: 0; background: transparent; padding: 2px 0; font-size: 14px; color: var(--ink); min-width: 0; width: 100%; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 0; background: #FFFFFF; font-weight: 700; }
+.runbox { margin-top: 14px; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; background: #F7F2FA; }
+.rb-head { display: flex; justify-content: space-between; align-items: center; }
+.pill { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 2px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.rb-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+.rb-btns button { border-radius: 99px; padding: 6px 14px; min-height: 40px; background: #FFFFFF; border: 1px solid #79747E; }
+.rb-btns button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.rb-prog { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.rb-prog b { color: var(--ink); }
+.bar { height: 4px; background: #E8DEF8; border-radius: 2px; margin-top: 6px; }
+.bar i { display: block; height: 4px; width: 0; background: var(--accent); border-radius: 2px; transition: width .2s; }
+.loopcard { background: var(--panel); color: var(--ink); border-radius: 16px; padding: 12px 14px; }
+.loopcard h2 { color: var(--muted); }
+/* lower area: key, decision and timeline left; candidates, metrics and observation right */
+.lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 16px; align-items: start; }
+@media (max-width: 1050px) { .lower { grid-template-columns: minmax(0, 1fr); } }
+.span2 { grid-column: 1 / -1; }
 .iso-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; width: 100%; margin-top: 4px; }
-.iso-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
-.iso-item svg { flex: 0 0 56px; width: 56px; height: 42px; background: #FBFBFE; border-radius: 6px; }
+.iso-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
+.iso-item svg { flex: 0 0 56px; width: 56px; height: 42px; background: #FBFBFE; border-radius: 8px; }
 .iso-item b { display: block; color: var(--ink); font-size: 12.5px; font-weight: 600; }
 .iso-item span { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
-main { padding: 14px 16px 40px; max-width: 1500px; margin: 0 auto; }
-.grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 14px; }
-@media (max-width: 1050px) { .grid { grid-template-columns: minmax(0, 1fr); } }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
-.panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; min-width: 0; }
+.panel h2, .loopcard h2, .hero-map h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--soft); color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
 .tag.ok { background: var(--okbg); color: var(--ok); } .tag.bad { background: var(--badbg); color: var(--bad); }
 .tag.warn { background: var(--warnbg); color: var(--warn); } .tag.unk { background: var(--unkbg); color: var(--unk); }
-.status { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.status { font-size: 12px; color: var(--muted); margin-top: 10px; }
 .status b { color: var(--ink); }
 svg text { fill: var(--ink); }
-.stages { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
-@media (max-width: 700px) { .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.stage { border: 1px solid var(--line); border-radius: 8px; padding: 6px 7px; font-size: 12px; min-height: 74px; transition: background .15s, border-color .15s; }
+.stages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.stage { border: 1px solid var(--line); border-radius: 10px; padding: 6px 7px; font-size: 12px; min-height: 70px; transition: background .15s, border-color .15s; }
 .stage .n { font-size: 10.5px; color: var(--muted); }
 .stage .h { font-weight: 600; }
 .stage .v { color: var(--muted); font-size: 11.5px; margin-top: 2px; overflow-wrap: anywhere; }
 .stage.active { border-color: var(--accent); background: var(--soft); }
-.badge { display: inline-block; font-weight: 700; padding: 6px 12px; border-radius: 8px; letter-spacing: .02em; }
+.badge { display: inline-block; font-weight: 700; padding: 6px 12px; border-radius: 10px; letter-spacing: .02em; }
 .badge.ok { background: var(--okbg); color: var(--ok); } .badge.bad { background: var(--badbg); color: var(--bad); }
 .badge.warn { background: var(--warnbg); color: var(--warn); } .badge.unk { background: var(--unkbg); color: var(--unk); }
 .pv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
-.pv > div { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; }
+.pv > div { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; }
 .pv .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -85,13 +110,13 @@ td.num { font-variant-numeric: tabular-nums; }
 .checks { margin: 4px 0 2px 0; padding: 0; list-style: none; font-size: 12px; }
 .checks li { padding: 1px 0; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.card { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--soft); }
 .card .k { font-size: 11.5px; color: var(--muted); }
 .card .v { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .card .s { font-size: 11px; color: var(--muted); }
 .card .v.na { color: var(--unk); font-size: 15px; }
 .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
-@media (max-width: 700px) { .charts { grid-template-columns: minmax(0, 1fr); } .pv { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .charts, .pv, .cp-lists, .cp-row { grid-template-columns: minmax(0, 1fr); } .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .chart .t { font-size: 12px; font-weight: 600; } .chart .src { font-size: 11px; color: var(--muted); }
 .legend { font-size: 11.5px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
 .legend i { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
@@ -104,86 +129,115 @@ td.num { font-variant-numeric: tabular-nums; }
 .obs { font-size: 12px; }
 .obs td { padding: 3px 5px; }
 .hidden { display: none !important; }
-.banner { border: 1px solid var(--warn); background: var(--warnbg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; margin-bottom: 10px; }
+.banner { border: 1px solid var(--warn); background: var(--warnbg); color: var(--warn); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; margin-bottom: 10px; }
 .err { color: var(--bad); font-size: 12.5px; }
 details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
 .kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; font-size: 12.5px; }
 .kv div:nth-child(odd) { color: var(--muted); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+.controls label { display: flex; flex-direction: column; font-size: 11.5px; color: var(--muted); gap: 2px; }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">
+<header class="top">
+  <div class="titles">
     <h1>Verifiable Generative Control Plane — control-loop demo</h1>
     <span class="sub">Stage 1 research prototype · heuristic candidates, analytic nominal model · not a safety guarantee</span>
-    <div class="tabs"><button id="tabLive" class="active">Live run</button><button id="tabHist">Saved campaigns</button>
-      <div class="seg" role="group" aria-label="Map view"><button id="viewNormal" aria-pressed="true">Normal view</button><button id="viewIso" aria-pressed="false">Isometric view</button></div></div>
   </div>
-  <div class="controls" id="liveControls">
-    <label>Scenario<select id="scenario"></select></label>
-    <label>Controller<select id="controller"></select></label>
-    <label>Seed<input id="seed" type="number" min="0" value="1"></label>
-    <label>Backend<select id="backend"></select></label>
-    <label>Speed (ms / slot)<input id="speed" type="number" min="0" step="100" value="500"></label>
-    <button id="btnStart" class="primary">Start new run</button>
-    <button id="btnPlay" disabled>▶ Play</button>
-    <button id="btnStep" disabled>Step</button>
-    <button id="btnReset" disabled>Reset</button>
-  </div>
-  <div class="status" id="status">Loading…</div>
+  <div class="seg" role="group" aria-label="Map view"><button id="viewNormal" aria-pressed="true">Normal view</button><button id="viewIso" aria-pressed="false">Isometric view</button></div>
 </header>
 
 <main>
-<section id="live">
-  <div class="grid">
-    <div class="col">
-      <div class="panel">
-        <h2>Network topology <span class="tag" id="topoSrc">configs/network.yaml</span></h2>
-        <svg id="topo" viewBox="0 0 640 300" width="100%" role="img" aria-label="Network topology"></svg>
-        <svg id="iso" class="hidden" width="100%" role="img" aria-label="Isometric city view of the network: switches as intersections, links as roads, slices as vehicles"></svg>
-        <div class="legend" id="topoLegend"></div>
-        <p class="note" id="topoNote">Link colour and label: utilization in the slot just observed (simulator ground truth, or measured on Mininet).
-          Dashed grey = link powered off. Coloured lines = the path each slice is installed on.</p>
-      </div>
-      <div class="panel">
-        <h2>Control loop, slot <span id="slotNo">–</span></h2>
-        <div class="stages" id="stages"></div>
-      </div>
-      <div class="panel">
-        <h2>Decision</h2>
-        <div id="decision"><p class="note">Start a run and step through it.</p></div>
-      </div>
-    </div>
-    <div class="col">
-      <div class="panel">
-        <h2>Candidates and verification</h2>
-        <div id="candidates" class="tablewrap"><p class="note">No step yet.</p></div>
-      </div>
-      <div class="panel">
-        <h2>Metrics <span class="tag" id="metricSrc">–</span></h2>
-        <div class="cards" id="cards"></div>
-        <div class="charts" id="charts"></div>
-        <p class="note" id="metricNote"></p>
-      </div>
-    </div>
+<section class="hero" aria-label="Network map and control panel">
+  <div class="hero-map">
+    <h2>Network topology <span class="tag" id="topoSrc">configs/network.yaml</span></h2>
+    <svg id="topo" viewBox="0 0 640 300" width="100%" role="img" aria-label="Network topology"></svg>
+    <svg id="iso" class="hidden" width="100%" role="img" aria-label="Isometric city view of the network: switches as intersections, links as roads, slices as vehicles"></svg>
   </div>
-  <div class="grid" style="margin-top:14px">
+  <aside class="hero-side">
+    <div class="cpanel">
+      <div class="cp-tabs" role="tablist" aria-label="Control panel">
+        <button id="tabLive" class="active" role="tab" aria-selected="true">Live run</button>
+        <button id="tabHist" role="tab" aria-selected="false">Saved campaigns</button>
+      </div>
+      <div class="cp-body" id="liveControls">
+        <div class="cp-h">Configuration</div>
+        <div class="cp-lists">
+          <fieldset class="choice"><legend>Scenario</legend><div class="clist" id="scenarioList"></div></fieldset>
+          <fieldset class="choice"><legend>Controller</legend><div class="clist" id="controllerList"></div></fieldset>
+        </div>
+        <select id="scenario" class="hidden" aria-hidden="true" tabindex="-1"></select>
+        <select id="controller" class="hidden" aria-hidden="true" tabindex="-1"></select>
+        <div class="cp-row">
+          <label class="field">Seed<span class="stepper"><input id="seed" type="number" min="0" value="1"><button type="button" data-step="seed:-1" aria-label="Seed minus one">−</button><button type="button" data-step="seed:1" aria-label="Seed plus one">+</button></span></label>
+          <label class="field">Backend<select id="backend"></select></label>
+          <label class="field">Speed (ms / slot)<span class="stepper"><input id="speed" type="number" min="0" step="100" value="500"><button type="button" data-step="speed:-100" aria-label="Slower: 100 ms less per slot">−</button><button type="button" data-step="speed:100" aria-label="100 ms more per slot">+</button></span></label>
+        </div>
+        <div class="runbox">
+          <div class="rb-head"><b>Current run</b><span class="pill" id="runState">IDLE</span></div>
+          <div class="rb-btns">
+            <button id="btnStart" class="primary">New run</button>
+            <button id="btnPlay" disabled>▶ Play</button>
+            <button id="btnReset" disabled>↻ Reset</button>
+            <button id="btnStep" disabled>Step</button>
+          </div>
+          <div class="rb-prog"><span>Run progress</span><span id="progTxt">no run</span></div>
+          <div class="bar"><i id="progBar"></i></div>
+          <div class="status" id="status">Loading…</div>
+        </div>
+      </div>
+      <div class="cp-body hidden" id="histControls">
+        <div class="cp-h">Saved campaigns</div>
+        <p class="note">Pick a campaign in the panel below the map. These are historical results, not produced by the live run.</p>
+      </div>
+    </div>
+    <div class="loopcard">
+      <h2>Control loop, slot <span id="slotNo">–</span></h2>
+      <div class="stages" id="stages"></div>
+    </div>
+  </aside>
+</section>
+
+<section id="live" class="lower">
+  <div class="col">
+    <div class="panel">
+      <h2>Key</h2>
+      <div class="legend" id="topoLegend"></div>
+      <p class="note" id="topoNote">Link colour and label: utilization in the slot just observed (simulator ground truth, or measured on Mininet).
+        Dashed grey = link powered off. Coloured lines = the path each slice is installed on.</p>
+    </div>
+    <div class="panel">
+      <h2>Decision</h2>
+      <div id="decision"><p class="note">Start a run and step through it.</p></div>
+    </div>
     <div class="panel">
       <h2>Event timeline <span class="tag">derived from this run's records</span></h2>
       <div class="timeline" id="timeline"><p class="note">No events yet.</p></div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="panel">
+      <h2>Candidates and verification</h2>
+      <div id="candidates" class="tablewrap"><p class="note">No step yet.</p></div>
+    </div>
+    <div class="panel">
+      <h2>Metrics <span class="tag" id="metricSrc">–</span></h2>
+      <div class="cards" id="cards"></div>
+      <div class="charts" id="charts"></div>
+      <p class="note" id="metricNote"></p>
     </div>
     <div class="panel">
       <h2>Observation the controller used <span class="tag">telemetry, may be noisy, stale or missing</span></h2>
       <div id="observation" class="tablewrap"><p class="note">No observation yet.</p></div>
     </div>
   </div>
-  <div class="panel hidden" id="summaryPanel" style="margin-top:14px">
+  <div class="panel hidden span2" id="summaryPanel">
     <h2>Run summary</h2>
     <div id="summary"></div>
   </div>
 </section>
 
-<section id="hist" class="hidden">
+<section id="hist" class="hidden" style="margin-top:16px">
   <div class="panel">
     <h2>Saved campaigns <span class="tag warn">historical data — not produced by the live run</span></h2>
     <div class="controls"><label>Campaign<select id="histSel"></select></label></div>
@@ -241,10 +295,35 @@ function drawMap(state) {
   } else drawTopo(state);
 }
 $("viewNormal").onclick = () => setView("normal"); $("viewIso").onclick = () => setView("iso");
-$("tabLive").onclick = () => { $("live").classList.remove("hidden"); $("hist").classList.add("hidden"); $("liveControls").classList.remove("hidden");
-  $("tabLive").classList.add("active"); $("tabHist").classList.remove("active"); };
-$("tabHist").onclick = () => { $("hist").classList.remove("hidden"); $("live").classList.add("hidden"); $("liveControls").classList.add("hidden");
-  $("tabHist").classList.add("active"); $("tabLive").classList.remove("active"); loadHistory(); };
+function showTab(live) {
+  $("live").classList.toggle("hidden", !live); $("hist").classList.toggle("hidden", live);
+  $("liveControls").classList.toggle("hidden", !live); $("histControls").classList.toggle("hidden", live);
+  $("tabLive").classList.toggle("active", live); $("tabHist").classList.toggle("active", !live);
+  $("tabLive").setAttribute("aria-selected", String(live)); $("tabHist").setAttribute("aria-selected", String(!live));
+}
+$("tabLive").onclick = () => showTab(true);
+$("tabHist").onclick = () => { showTab(false); loadHistory(); };
+
+// ------------------------------------------------------------------ control panel: tick-box lists and steppers
+// The hidden <select>s stay the source of truth for the run; the lists only set them.
+function renderChoices() {
+  const row = (group, value, label, cid, title) => `<label class="crow" title="${esc(title || "")}">${cid ? `<span class="cid">${esc(cid)}</span>` : "<span></span>"}
+    <span>${esc(label)}</span><input type="radio" name="${group}" value="${esc(value)}"${$(group).value === value ? " checked" : ""}><span class="tick" aria-hidden="true"></span></label>`;
+  $("scenarioList").innerHTML = META.scenarios.map((sc) => {
+    const m = /^(s\d+)_(.*)$/.exec(sc.name);
+    return row("scenario", sc.name, `${m ? m[2] : sc.name} (${sc.slots} slots)`, m ? m[1] : "", sc.description);
+  }).join("");
+  $("controllerList").innerHTML = META.controllers.map((c) => row("controller", c, c, "", "")).join("");
+  for (const g of ["scenario", "controller"])
+    $(g + "List").querySelectorAll("input").forEach((inp) => inp.onchange = () => { $(g).value = inp.value; if ($(g).onchange) $(g).onchange(); });
+}
+function syncChoices() {
+  for (const g of ["scenario", "controller"]) $(g + "List").querySelectorAll("input").forEach((inp) => { inp.checked = inp.value === $(g).value; });
+}
+document.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => {
+  const [id, d] = b.dataset.step.split(":"), el = $(id);
+  el.value = String(Math.max(+el.min || 0, (+el.value || 0) + +d));
+});
 
 // ------------------------------------------------------------------ topology
 let POS = {};
@@ -515,6 +594,10 @@ async function renderSummary() {
 // ------------------------------------------------------------------ run control
 function syncButtons() {
   const has = !!RUN, done = has && RUN.steps.length >= RUN.slots;
+  $("runState").textContent = !has ? "IDLE" : done ? "FINISHED" : playing ? "PLAYING" : "ACTIVE";
+  $("progTxt").innerHTML = has ? `slot <b>${RUN.steps.length}</b> / ${RUN.slots}` : "no run";
+  $("progBar").style.width = has ? `${(100 * RUN.steps.length / RUN.slots).toFixed(1)}%` : "0";
+  if (META) syncChoices();
   $("btnPlay").disabled = !has || done || busy && !playing; $("btnStep").disabled = !has || done || playing || busy; $("btnReset").disabled = !has;
   $("btnPlay").textContent = playing ? "⏸ Pause" : "▶ Play";
   if (has) setStatus(`Run <b>${esc(RUN.scenario)}</b> · controller <b>${esc(RUN.controller)}</b> · seed ${RUN.seed} · ${RUN.backend === "sim" ? "simulated network" : "<b>Mininet</b>"} · slot <b>${RUN.steps.length}</b> / ${RUN.slots}${done ? " · <b>finished</b>" : playing ? " · playing" : ""}`);
@@ -605,6 +688,7 @@ async function showHistory() {
     $("scenario").innerHTML = META.scenarios.map((s) => `<option value="${esc(s.name)}" title="${esc(s.description)}">${esc(s.name)} (${s.slots} slots)</option>`).join("");
     $("scenario").value = "s3_background_on_urllc_path"; $("scenario").onchange();
     $("controller").innerHTML = META.controllers.map((c) => `<option>${esc(c)}</option>`).join("");
+    renderChoices();
     $("backend").innerHTML = Object.entries(META.backends).map(([k, b]) => `<option value="${k}" ${b.available ? "" : "disabled"} title="${esc(b.reason)}">${k === "sim" ? "simulated" : "Mininet"}${b.available ? "" : " (unavailable)"}</option>`).join("");
     const mn = META.backends.mininet;
     setStatus(`Ready. Pick a scenario and controller, then <b>Start new run</b>. Fallback policy: ${esc(META.fallback_policy)}. Mininet: ${mn.available ? "available" : "unavailable — " + esc(mn.reason)}`);
