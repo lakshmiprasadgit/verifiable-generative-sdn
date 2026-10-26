@@ -347,10 +347,53 @@
     svg.setAttribute("viewBox", `${r1(xa - 12)} ${r1(ya - 8)} ${r1(xb - xa + 24)} ${r1(yb - ya + 20)}`);
     svg.innerHTML = ground.join("") + marks.join("") + objs.map((o) => o[1]).join("") + labels.join("");
 
-    const lightTxt = light ? {green: "green: certified action", amber: "amber: certified fallback or unverified baseline", red: "red: uncertified fallback or not applied"}[light] : "off until the first decision";
-    return `<span>Ambulance = URLLC</span><span>Bus = eMBB</span><span>Scooter = mMTC</span><span>Other cars = background (unmanaged)</span>`
-      + `<span>Vehicle count follows each rate; positions are illustrative</span><span>Overhead sign = link utilization (amber over ${limit}, red over capacity)</span>`
-      + `<span>Gate traffic light = decision (${lightTxt})</span>`;
+    return legend(T, limit, light);
+  }
+
+  // ---------------------------------------------------------------- illustrated key
+  // Each entry is drawn with the same assets as the scene, fitted into a small icon.
+  function icon(inner) {
+    const xs = [], ys = [];
+    for (const m of inner.matchAll(/points="([^"]+)"/g))
+      for (const pr of m[1].split(" ")) { const [x, y] = pr.split(",").map(Number); xs.push(x); ys.push(y); }
+    for (const m of inner.matchAll(/x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"/g)) { xs.push(+m[1], +m[3]); ys.push(+m[2], +m[4]); }
+    for (const m of inner.matchAll(/cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)"/g)) { xs.push(+m[1] - +m[3], +m[1] + +m[3]); ys.push(+m[2] - +m[3], +m[2] + +m[3]); }
+    const pad = 3, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad;
+    const w = Math.max(...xs) + pad - x0, h = Math.max(...ys) + pad - y0;
+    return `<svg viewBox="${r1(x0)} ${r1(y0)} ${r1(w)} ${r1(h)}" aria-hidden="true" preserveAspectRatio="xMidYMid meet">${inner}</svg>`;
+  }
+  const entry = (art, title, text) => `<div class="iso-item">${icon(art)}<div><b>${title}</b><span>${text}</span></div></div>`;
+  function roads(T) {
+    const caps = Object.values(T.links).map((l) => l.capacity_mbps), lo = Math.min(...caps), hi = Math.max(...caps);
+    let s = "";
+    for (const [y, cap] of [[0, lo], [1.6, hi]]) {
+      const w = 0.4 + 0.6 * cap / hi;
+      s += flat(0, y - w / 2 - 0.2, 2, w + 0.4, "#E3E6E9") + flat(0, y - w / 2, 2, w, "#4F555E");
+      for (let x = 0.2; x < 1.9; x += 0.6) s += flat(x, y - 0.025, 0.3, 0.05, "#F1F3F5");
+    }
+    return [s, lo, hi];
+  }
+  function plaza() {
+    let s = flat(-0.7, -0.7, 1.4, 1.4, "#E3E6E9") + flat(-0.5, -0.5, 1.0, 1.0, "#4A5059");
+    for (let v = -0.42; v < 0.4; v += 0.13) s += flat(0.52, v, 0.24, 0.065, "#F4F5F6") + flat(v, 0.52, 0.065, 0.24, "#F4F5F6");
+    return s;
+  }
+  function legend(T, limit, light) {
+    const [roadArt, lo, hi] = roads(T);
+    const signs = Asset.gantry(0, 0, "x", 0.3, "OK", "#2F7D4A") + Asset.gantry(0, 1.5, "x", 0.3, `>${Math.round(limit * 100)}%`, "#C77700")
+      + Asset.gantry(0, 3.0, "x", 0.3, ">100%", "#C0362C");
+    const now = light ? {green: "now green: certified action", amber: "now amber: fallback or unverified action", red: "now red: uncertified fallback or not applied"}[light]
+      : "off until the first decision";
+    return `<div class="iso-legend">`
+      + entry(Asset.ambulance(0, 0, "x"), "Ambulance · URLLC", "low-latency slice (1 ms promise)")
+      + entry(Asset.bus(0, 0, "x", "#1F6FD1"), "Bus · eMBB", "high-throughput slice")
+      + entry(Asset.scooter(0, 0, "x", "#2E8B57"), "Scooter · mMTC", "many small devices")
+      + entry(Asset.car(0, 0, "x", "#9AA1AB") + Asset.car(0.9, 0.45, "x", "#C9524A"), "Other cars · background", "traffic the controller does not manage")
+      + entry(roadArt, "Road · link", `wider road = more capacity (${hi} vs ${lo} Mb/s)`)
+      + entry(plaza(), "Intersection · switch", `${esc(T.ingress)} gate = ingress, ${esc(T.egress)} hub = egress`)
+      + entry(signs, "Overhead sign · utilization", `green within the ${limit} limit · amber over it · red over capacity`)
+      + entry(Asset.trafficLight(0, 0, light), "Gate light · decision", `${now}. Red also means not shown safe.`)
+      + `</div>`;
   }
 
   window.VGCPIso = {render, project: P, layout: cityLayout};
