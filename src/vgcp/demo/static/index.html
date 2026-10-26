@@ -38,6 +38,20 @@ main { padding: 8px 20px 40px; max-width: 1560px; margin: 0 auto; }
 .cp-tabs button.active { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
 .cp-body { padding: 14px 18px 18px; }
 .cp-h { font-weight: 650; margin: 0 0 10px; }
+.dd { position: relative; margin-bottom: 12px; }
+.dd-half { width: 58%; min-width: 210px; }
+.dd-btn { display: grid; grid-template-columns: minmax(0, 1fr) 14px; grid-template-rows: auto auto; column-gap: 10px; width: 100%; text-align: left;
+  background: #D3C9E1; border: 0; border-bottom: 1px solid #49454F; border-radius: 6px 6px 0 0; padding: 8px 14px 9px; color: var(--ink); }
+.dd-btn:hover { background: #CABFDA; }
+.dd-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dd-l { grid-column: 1; font-size: 12px; color: #49454F; }
+.dd-v { grid-column: 1; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-caret { grid-column: 2; grid-row: 1 / 3; align-self: center; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid #1C1B1F; transition: transform .15s; }
+.dd-btn[aria-expanded="true"] .dd-caret { transform: rotate(180deg); }
+.dd-btn[aria-expanded="true"] { border-bottom: 2px solid var(--accent); }
+.dd-pop { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; background: #F3EDF7; border-radius: 14px; padding: 6px;
+  box-shadow: 0 6px 20px rgba(28, 27, 31, .22); max-height: 330px; overflow-y: auto; }
+.dd-half .dd-pop { right: auto; min-width: 100%; width: max-content; max-width: 320px; }
 .cp-lists { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; }
 fieldset.choice { border: 0; padding: 0; margin: 0; min-width: 0; }
 fieldset.choice legend { font-size: 11.5px; color: var(--muted); padding: 0 0 4px; }
@@ -51,7 +65,7 @@ fieldset.choice legend { font-size: 11.5px; color: var(--muted); padding: 0 0 4p
 .crow:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); }
 .crow:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cp-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-.field { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); background: #ECE6F0; border-bottom: 1px solid #49454F; border-radius: 6px 6px 0 0; padding: 6px 8px 4px; }
+.field { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); background: #D3C9E1; border-bottom: 1px solid #49454F; border-radius: 6px 6px 0 0; padding: 6px 10px 5px; }
 .field select, .field input { border: 0; background: transparent; padding: 2px 0; font-size: 14px; color: var(--ink); min-width: 0; width: 100%; }
 .stepper { display: flex; align-items: center; gap: 4px; }
 .stepper button { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 0; background: #FFFFFF; font-weight: 700; }
@@ -162,9 +176,15 @@ details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
       </div>
       <div class="cp-body" id="liveControls">
         <div class="cp-h">Configuration</div>
-        <div class="cp-lists">
-          <fieldset class="choice"><legend>Scenario</legend><div class="clist" id="scenarioList"></div></fieldset>
-          <fieldset class="choice"><legend>Controller</legend><div class="clist" id="controllerList"></div></fieldset>
+        <div class="dd" id="ddScenario">
+          <button type="button" class="dd-btn" id="scenarioBtn" aria-haspopup="true" aria-expanded="false" aria-controls="scenarioPop">
+            <span class="dd-l">Scenario</span><span class="dd-v" id="scenarioVal">–</span><span class="dd-caret" aria-hidden="true"></span></button>
+          <div class="dd-pop hidden" id="scenarioPop" role="radiogroup" aria-label="Scenario"><div class="clist" id="scenarioList"></div></div>
+        </div>
+        <div class="dd dd-half" id="ddController">
+          <button type="button" class="dd-btn" id="controllerBtn" aria-haspopup="true" aria-expanded="false" aria-controls="controllerPop">
+            <span class="dd-l">Controller</span><span class="dd-v" id="controllerVal">–</span><span class="dd-caret" aria-hidden="true"></span></button>
+          <div class="dd-pop hidden" id="controllerPop" role="radiogroup" aria-label="Controller"><div class="clist" id="controllerList"></div></div>
         </div>
         <select id="scenario" class="hidden" aria-hidden="true" tabindex="-1"></select>
         <select id="controller" class="hidden" aria-hidden="true" tabindex="-1"></select>
@@ -315,11 +335,31 @@ function renderChoices() {
   }).join("");
   $("controllerList").innerHTML = META.controllers.map((c) => row("controller", c, c, "", "")).join("");
   for (const g of ["scenario", "controller"])
-    $(g + "List").querySelectorAll("input").forEach((inp) => inp.onchange = () => { $(g).value = inp.value; if ($(g).onchange) $(g).onchange(); });
+    $(g + "List").querySelectorAll("input").forEach((inp) => inp.onchange = () => {
+      $(g).value = inp.value; if ($(g).onchange) $(g).onchange(); syncChoices(); openDropdown(g, false); $(g + "Btn").focus();
+    });
+  syncChoices();
 }
 function syncChoices() {
-  for (const g of ["scenario", "controller"]) $(g + "List").querySelectorAll("input").forEach((inp) => { inp.checked = inp.value === $(g).value; });
+  for (const g of ["scenario", "controller"]) {
+    $(g + "List").querySelectorAll("input").forEach((inp) => { inp.checked = inp.value === $(g).value; });
+    const sc = g === "scenario" && META ? META.scenarios.find((x) => x.name === $(g).value) : null;
+    $(g + "Val").textContent = sc ? `${sc.name} (${sc.slots} slots)` : ($(g).value || "–");
+  }
 }
+// drop-downs: the button shows the choice; the menu holds the tick-box list
+function openDropdown(g, open) {
+  $(g + "Pop").classList.toggle("hidden", !open);
+  $(g + "Btn").setAttribute("aria-expanded", String(open));
+  if (open) { const sel = $(g + "List").querySelector("input:checked") || $(g + "List").querySelector("input"); if (sel) sel.focus(); }
+}
+for (const g of ["scenario", "controller"])
+  $(g + "Btn").onclick = () => { const open = $(g + "Pop").classList.contains("hidden"); openDropdown("scenario", false); openDropdown("controller", false); openDropdown(g, open); };
+document.addEventListener("click", (e) => { for (const g of ["scenario", "controller"]) if (!$("dd" + g[0].toUpperCase() + g.slice(1)).contains(e.target)) openDropdown(g, false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (const g of ["scenario", "controller"]) if (!$(g + "Pop").classList.contains("hidden")) { openDropdown(g, false); $(g + "Btn").focus(); }
+});
 document.querySelectorAll("[data-step]").forEach((b) => b.onclick = () => {
   const [id, d] = b.dataset.step.split(":"), el = $(id);
   el.value = String(Math.max(+el.min || 0, (+el.value || 0) + +d));
