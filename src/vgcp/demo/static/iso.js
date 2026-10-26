@@ -18,6 +18,8 @@
 */
 (function () {
   "use strict";
+  // Scene settings chosen on the design canvas ("Isometric city · tweak here", 2026-10-26)
+  const STYLE = {span: 16, rowGap: 4, ring: 1, decorDensity: 15, vehicleDensity: 0.75, light: 0.20};
   const S = 30, C30 = Math.cos(Math.PI / 6), S30 = 0.5;
   const P = (x, y, z) => [(x - y) * C30 * S, (x + y) * S30 * S - (z || 0) * S];
   const r1 = (v) => Math.round(v * 10) / 10;
@@ -31,7 +33,7 @@
     const t = k > 0 ? 255 : 0, a = Math.abs(k);
     return "rgb(" + rgb(hex).map((c) => Math.round(c + (t - c) * a)).join(",") + ")";
   }
-  const LIGHT = {top: 0.24, left: 0, right: -0.24}; // one light, top-left
+  const LIGHT = {top: STYLE.light, left: 0, right: -STYLE.light}; // one light, top-left
   const poly = (p, fill, extra) => `<polygon points="${pts(p)}" fill="${fill}"${extra ? " " + extra : ""}/>`;
   const flat = (x, y, dx, dy, fill, z, extra) => poly([[x, y, z || 0], [x + dx, y, z || 0], [x + dx, y + dy, z || 0], [x, y + dy, z || 0]], fill, extra);
   const line = (a, b, stroke, w, extra) => {
@@ -160,7 +162,7 @@
   // Nodes on a tile grid from the configured paths: ingress and egress at the ends,
   // one row per path, each path's inner switches spread evenly along its row.
   function cityLayout(T) {
-    const pids = Object.keys(T.paths).sort(), rows = pids.length, span = 10, gap = 3;
+    const pids = Object.keys(T.paths).sort(), rows = pids.length, span = STYLE.span, gap = STYLE.rowGap;
     const node = {};
     node[T.ingress] = [0, (rows - 1) * gap / 2];
     node[T.egress] = [span, (rows - 1) * gap / 2];
@@ -183,7 +185,7 @@
       const ws = Object.values(links).filter((k) => k.a === n || k.b === n).map((k) => k.w);
       half[n] = Math.max(0.3, ...ws) / 2 + 0.15;
     }
-    return {node, links, half, bounds: {x0: -2, y0: -2, x1: span + 2, y1: (rows - 1) * gap + 2}};
+    return {node, links, half, bounds: {x0: -STYLE.ring, y0: -STYLE.ring, x1: span + STYLE.ring, y1: (rows - 1) * gap + STYLE.ring}};
   }
   const segRect = (a, b, w) => {
     const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
@@ -255,22 +257,16 @@
       || Object.keys(node).some((n) => Math.abs(cx - node[n][0]) < half[n] + 0.8 && Math.abs(cy - node[n][1]) < half[n] + 0.8);
     for (let gx = Math.ceil(B.x0); gx < B.x1 - 0.5; gx++) for (let gy = Math.ceil(B.y0); gy < B.y1 - 0.5; gy++) {
       const cx = gx + 0.5, cy = gy + 0.5;
-      if (busy(cx, cy)) continue;
+      if (busy(cx, cy) || hash(gy, gx) % 100 >= STYLE.decorDensity) continue; // keep the city sparse
       const h = hash(gx, gy) % 100, x = gx + 0.2, y = gy + 0.2; // a 0.6-tile lot in the middle of the tile
       // tall objects hide what lies behind them on screen, so towers only stand in the
       // back ring (behind every road); elsewhere the city stays low
       const back = cx < 0 || cy < 0;
-      if (h < 18) add(cx + cy, Asset.house(x, y, 0.6, 0.6, back ? 0.58 : 0.46, "#D2574C", "#7E2F2B"));
-      else if (h < 32 && back) add(cx + cy, Asset.tower(x, y, 0.6, 0.6, 1.3 + (h % 3) * 0.25, "#6F86A6"));
-      else if (h < 32) add(cx + cy, Asset.tree(cx, cy, 0.85));
-      else if (h < 42) add(cx + cy, Asset.shop(x, y, 0.6, 0.55));
-      else if (h < 70) { add(cx + cy - 0.2, Asset.tree(gx + 0.32, gy + 0.32, 0.9)); if (h % 2) add(cx + cy + 0.2, Asset.tree(gx + 0.7, gy + 0.68, 0.75)); }
-      else if (h < 76) add(cx + cy, Asset.lamp(cx, cy));
-    }
-    // street lamps along the widest road, on the sidewalk
-    for (const [lid, a, b, w] of segs) {
-      if (w < 0.9 || a[1] !== b[1]) continue;
-      for (let x = Math.min(a[0], b[0]) + 1.2; x < Math.max(a[0], b[0]) - 0.8; x += 2.2) add(x + a[1] + w / 2 + 0.3, Asset.lamp(x, a[1] + w / 2 + 0.3));
+      if (h < 22) add(cx + cy, Asset.house(x, y, 0.6, 0.6, back ? 0.58 : 0.46, "#D2574C", "#7E2F2B"));
+      else if (h < 36 && back) add(cx + cy, Asset.tower(x, y, 0.6, 0.6, 1.3 + (h % 3) * 0.25, "#6F86A6"));
+      else if (h < 48) add(cx + cy, Asset.shop(x, y, 0.6, 0.55));
+      else if (h < 90) add(cx + cy, Asset.tree(cx, cy, 0.85));
+      else add(cx + cy, Asset.lamp(cx, cy));
     }
 
     // vehicles: count follows the rate; unknown rates draw none
@@ -291,9 +287,9 @@
     const phase = ((opts.t || 0) * 0.137) % 1;
     if (inst) {
       const counts = {
-        urllc: (v) => Math.max(1, Math.min(3, Math.round(v / 1.5))),
-        embb: (v) => Math.max(1, Math.min(8, Math.round(v / 14))),
-        mmtc: (v) => Math.max(1, Math.min(6, Math.round(v / 0.5))),
+        urllc: (v) => Math.max(1, Math.min(3, Math.round(v / 1.5 * STYLE.vehicleDensity))),
+        embb: (v) => Math.max(1, Math.min(10, Math.round(v / 14 * STYLE.vehicleDensity))),
+        mmtc: (v) => Math.max(1, Math.min(8, Math.round(v / 0.5 * STYLE.vehicleDensity))),
       };
       for (const sl of Object.keys(counts)) {
         const pl = route(inst.path[sl]), v = thr[sl];
@@ -309,7 +305,7 @@
     for (const [lid, k] of Object.entries(links)) {
       const v = bg[lid];
       if (power[lid] === false || !isNum(v) || v <= 0.5) continue;
-      place(k.poly, Math.max(1, Math.min(10, Math.round(v / 12))), -k.w / 4, (phase + 0.73) % 1, (x, y, al, i) => Asset.car(x, y, al, civ[i % civ.length]));
+      place(k.poly, Math.max(1, Math.min(12, Math.round(v / 12 * STYLE.vehicleDensity))), -k.w / 4, (phase + 0.73) % 1, (x, y, al, i) => Asset.car(x, y, al, civ[i % civ.length]));
     }
 
     // overhead signs: one per link, on its longest segment, showing utilization
