@@ -1,0 +1,68 @@
+{
+  "command": [
+    ".venv/bin/python",
+    "-m",
+    "vgcp.experiments",
+    "--scenarios",
+    "experiments/scenarios/s1_steady.yaml",
+    "experiments/scenarios/s2_background_on_embb_path.yaml",
+    "experiments/scenarios/s3_background_on_urllc_path.yaml",
+    "experiments/scenarios/s4_telemetry_faults.yaml",
+    "experiments/scenarios/s5_model_mismatch.yaml",
+    "experiments/scenarios/s6_actuation_delay_and_failures.yaml",
+    "--seeds",
+    "6-10",
+    "--out",
+    "experiments/results/paper-2026-11-09/heldout"
+  ],
+  "started_utc": "2026-11-09T05:18:16.203850+00:00",
+  "git_commit": "296d117f20ffb02e2f10fb97410e6a2faf3b4ec6",
+  "git_dirty": false,
+  "python": "3.12.3",
+  "backend": "simulated",
+  "config_hash": "776327bc21940d92728047b5c8c1c79c6ba0325ce6c55a1cda275ee93b47103a",
+  "fallback_policy": "capacity_aware",
+  "latency_safety_factor": 1.5,
+  "config_overrides": {},
+  "scenarios": {
+    "s1_steady": {
+      "file": "experiments/scenarios/s1_steady.yaml",
+      "digest": "bf29de53c25ab5957445d3048606221c2a50c47c34ca682148088fdd029787e0"
+    },
+    "s2_background_on_embb_path": {
+      "file": "experiments/scenarios/s2_background_on_embb_path.yaml",
+      "digest": "fbd3393d15d53484f48d58f24bb264e874f85f23f3b388aab214c88943cac635"
+    },
+    "s3_background_on_urllc_path": {
+      "file": "experiments/scenarios/s3_background_on_urllc_path.yaml",
+      "digest": "65f21e179aeb222559fb9d48283893968217b38b8a19c811c23cfcd571a550ce"
+    },
+    "s4_telemetry_faults": {
+      "file": "experiments/scenarios/s4_telemetry_faults.yaml",
+      "digest": "8a19adb24b1bfc9ed24501de6d5f2a9aeb528e8dc7ab9e2cac346940ba2bffaa"
+    },
+    "s5_model_mismatch": {
+      "file": "experiments/scenarios/s5_model_mismatch.yaml",
+      "digest": "5263932d9cf4c5378ac958cfad88636bd107ef11afbd613807fb0c0c8349562b"
+    },
+    "s6_actuation_delay_and_failures": {
+      "file": "experiments/scenarios/s6_actuation_delay_and_failures.yaml",
+      "digest": "a9e1c141a9a6867714d01a4b666cb5d41f2882463a9592692b81323afa55e3b5"
+    }
+  },
+  "modes": [
+    "shielded",
+    "shielded-utility",
+    "unshielded",
+    "unshielded-fitted",
+    "fallback-only"
+  ],
+  "seeds": [
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "n_random": 4
+}

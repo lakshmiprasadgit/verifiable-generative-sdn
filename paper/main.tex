@@ -1,0 +1,748 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.17}
+\usepgfplotslibrary{groupplots}
+
+\newcommand{\That}{\hat{T}}
+\newcommand{\dbar}{\bar{d}}
+\newcommand{\shat}{\hat{s}}
+\newcommand{\ahat}{\hat{a}}
+\newcommand{\Acal}{\mathcal{A}}
+\newcommand{\Ccal}{\mathcal{C}}
+\newcommand{\rhomin}{\rho_{\min}}
+\newcommand{\stlG}{\mathbf{G}}
+\newcommand{\stlU}{\mathbf{U}}
+
+\begin{document}
+
+\title{Predictive Verification in a Shielded SDN Control Loop:\\
+A Stage-1 Prototype of a Verifiable Generative Control Plane}
+
+\author{\IEEEauthorblockN{Venkatesh V (23BEC060),
+Kalyan J (23BEC022),
+Dileep A (23BEC003),\\
+Lakshmi Prasad D (23BEC018)\IEEEauthorrefmark{1},
+S Siva Tejananda Reddy (23BEC053)}
+\IEEEauthorblockA{\textit{Department of Electronics and Communication Engineering}\\
+\textit{Indian Institute of Information Technology Dharwad}\\
+Dharwad, Karnataka, India\\
+\IEEEauthorrefmark{1}Contact author: 23bec018@iiitdwd.ac.in}
+}
+
+\maketitle
+
+\begin{abstract}
+A controller that proposes SDN actions, whether learned, generative or hand-written,
+can produce a configuration that is valid now but breaks a capacity limit or a
+latency requirement a few slots later. We study whether \emph{predictive
+verification} can keep such actions off the network: every candidate is rolled ten
+slots ahead with a nominal queueing model and a fallback policy, checked against
+hard constraints and Signal Temporal Logic (STL) latency intents, and certified only
+if every intent keeps a robustness margin; a single enforcing applier installs only
+certified actions, or the fallback. We built a Stage-1 prototype of the verifiable
+generative control plane in which the learned generator and world model of the
+original formulation are replaced by heuristic candidates and an analytic model, so
+that the verification path can be tested in isolation. On a six-switch, three-slice
+topology we compare five controllers that receive identical candidates, in a
+simulator (six scenarios, five seeds, five held-out seeds, two ablations) and on
+Mininet with Open vSwitch. Under a background surge, routing the same candidates
+through the shield reduced violation slots from 16.4 to 0.8 per 60-slot run in
+simulation and from 4.2 to 0.6 on the emulated network, at 22--33\,ms of
+verification per one-second slot. The shield did not outperform a capacity-aware
+heuristic, which achieved the same outcomes, and with a fixed fallback that did not
+fit the surge it gave no protection at all. When the network differed structurally
+from the model, it certified unsafe actions in every slot, and recalibrating the
+model did not fix this. The prototype therefore shows that the certified path
+removes the dependence of safety on the generator, but not on the model or the
+fallback.
+\end{abstract}
+
+\begin{IEEEkeywords}
+software-defined networking, network slicing, signal temporal logic, runtime
+verification, safety shield, model predictive control, Mininet
+\end{IEEEkeywords}
+
+% =====================================================================
+\section{Introduction}
+
+In software-defined networking (SDN), routing and rate-limiting decisions are taken
+by a logically central controller and installed on switches through an open
+interface \cite{mckeown2008openflow,kreutz2015sdn}. Sliced 5G and planned 6G
+networks push this further: each slice has its own latency and throughput
+requirements, and demand and background traffic change from one control interval to
+the next \cite{foukas2017slicing,saad2020vision6g}. Learned controllers and, more
+recently, generative models are being proposed to choose these configurations
+\cite{boutaba2018mlnet,mao2016deeprm,leivadeas2023ibn,mondal2023llmconfig}.
+
+A proposed action can be a valid configuration and still be a bad decision. Give
+the broadband slice a 150\,Mbit/s reservation on a 200\,Mbit/s path. The rules are
+well formed and, when installed, the path may be lightly used. If unmanaged traffic
+then arrives on the same path, the link overloads within a slot and the slice's
+queueing delay rises far above its bound. Data-plane verifiers
+\cite{kazemian2012hsa,khurshid2013veriflow} establish that rules are reachable,
+loop-free and isolated; they do not predict how load and latency will evolve once
+the rules are in place. A controller that may hallucinate, as generative models do,
+needs a check of the second kind.
+
+The problem formulation of our course project \cite{vgcp_formulation} proposes a
+\emph{verifiable generative control plane} in which a generative policy proposes
+candidates and a verification shield accepts a candidate only if, rolled forward
+with a conservative nominal model and continued by a fallback policy, it satisfies
+hard constraints and STL intents with a robustness margin. If no candidate is
+certified, the fallback is applied. The formulation guarantees safety only under
+three assumptions: the horizon covers every intent, the shield is sound, and the
+fallback is always feasible.
+
+This paper asks what such a shield achieves in practice, before any learning is
+involved:
+
+\begin{quote}
+\emph{Can predictive verification of candidate actions keep actions that violate
+configured constraints or temporal service requirements off the certified control
+path, and under which conditions does that protection fail?}
+\end{quote}
+
+\noindent We make the question testable with three hypotheses, each answered by a
+specific comparison in Section~\ref{sec:results}:
+
+\begin{itemize}
+\item[\textbf{H1}] \emph{Prevention.} When the nominal model is adequate, routing
+a generator's candidates through the shield prevents the outcome violations that
+the same candidates cause when applied without verification. Test: shielded versus
+unshielded controllers on identical candidates (s2, s6).
+\item[\textbf{H2}] \emph{Model dependence.} Certification is only as reliable as the
+nominal model: when the network differs structurally from the model, certified
+actions can violate the intents, and rescaling the model does not repair this.
+Test: scenario s5 and the calibration study.
+\item[\textbf{H3}] \emph{Fallback dependence.} The shield helps only if the
+fallback used in its rollouts is itself feasible. Test: an ablation that changes only
+the fallback (static versus capacity-aware) with the generator, model and
+verification logic unchanged (s2, s6).
+\end{itemize}
+
+\noindent Two further questions, the verification cost and how often the shield is
+unnecessarily conservative, are measured alongside.
+
+We deliberately did not start with a learned generator. With a learned generator
+and a learned model, a failure could come from either of them or from the shield.
+Our prototype uses heuristic candidates, including a deliberately greedy one and
+random actions that play the role of hallucinated proposals, and an analytic
+queueing model whose errors can be traced. The contributions are:
+
+\begin{itemize}
+\item an implementation of the formulation's local feasibility certificate as a
+shield that issues machine-readable certificates, and a single enforcing applier
+that is the only shielded path to the network (Section~\ref{sec:method});
+\item the interpretations needed to make the formulation executable, stated
+explicitly (Section~\ref{sec:formulation});
+\item an evaluation of H1--H3 on a simulator and on Mininet/Open vSwitch against four
+baselines that receive identical candidates, including a strong hand-written
+heuristic, with held-out seeds and ablations of the fallback, the selection rule and
+model calibration (Sections~\ref{sec:setup}--\ref{sec:analysis});
+\item negative findings reported as such: the shield matched but did not beat the
+heuristic, it gave no protection with an infeasible fallback, it certified unsafe
+actions under a wrong model, and part of the emulated evidence remains open.
+\end{itemize}
+
+The prototype, configurations, experiment reports and tests are public
+\cite{vgcp_repo}.
+
+% =====================================================================
+\section{Related Work}
+
+\emph{SDN control and data-plane verification.} OpenFlow
+\cite{mckeown2008openflow} and SDN controllers \cite{kreutz2015sdn,berde2014onos}
+make it possible to change paths and rate limits programmatically. Header space
+analysis \cite{kazemian2012hsa} and VeriFlow \cite{khurshid2013veriflow} verify
+data-plane invariants, statically or as rules change. These tools answer whether a
+configuration is well formed. Our shield asks a different question, how load and
+latency will evolve over a horizon once a configuration is installed, and its
+routing-validity check is a much simpler version of what they verify.
+
+\emph{Learning-based and intent-based network management.} Machine learning has
+been applied to traffic classification, routing and resource management
+\cite{boutaba2018mlnet}, for example with deep reinforcement learning for resource
+allocation \cite{mao2016deeprm}. Intent-based networking translates operator goals
+into configurations \cite{leivadeas2023ibn}, and recent work studies what language
+models need to produce correct router configurations \cite{mondal2023llmconfig}.
+O-RAN exposes similar closed loops in the radio access network
+\cite{polese2023oran}. We do not propose a generator; we study the check that such a
+generator's output would pass through.
+
+\emph{Runtime verification and temporal logic.} Runtime verification checks an
+execution against a specification as it unfolds \cite{leucker2009rv}. STL was
+introduced for monitoring real-valued signals \cite{maler2004stl}, and its
+quantitative robustness semantics gives a signed margin by which a signal satisfies
+or violates a formula \cite{fainekos2009robustness,donze2010robust}. We use these
+semantics unchanged on discrete control slots. Our use differs from monitoring in one
+respect: we evaluate the formula on a \emph{predicted} trajectory before acting,
+not on the observed one afterwards.
+
+\emph{Predictive and safe control.} Constrained model predictive control (MPC)
+optimizes inputs over a horizon subject to constraints, and establishes recursive
+feasibility through a terminal set and controller \cite{mayne2000mpc}. STL
+specifications can be encoded into MPC \cite{raman2014stlmpc}. Our rollout,
+which applies the candidate once and a fallback afterwards, resembles the terminal
+controller construction, but we evaluate a handful of proposed candidates instead of
+optimizing, and we do not establish recursive feasibility; we measure how often it
+fails. The Simplex architecture \cite{sha2001simplex} pairs a high-performance
+controller with a verified safety controller and a switching rule, an idea close to
+our certified path and fallback. Shielding for reinforcement learning
+\cite{alshiekh2018shielding,garcia2015saferl} and control barrier functions
+\cite{ames2017cbf} also override unsafe actions, given a model of the safe set or
+the dynamics. All of these inherit the correctness of that model, which is the
+dependence our H2 measures.
+
+% =====================================================================
+\section{Problem Scenario}
+\label{sec:scenario}
+
+We consider a transport network serving three slices: URLLC (ultra-reliable
+low-latency), eMBB (enhanced mobile broadband) and mMTC (massive machine-type
+communication). The topology (Fig.~\ref{fig:topology}) has six switches and three
+paths from ingress $s_1$ to egress $s_5$: path A (two 50\,Mbit/s links, 0.1\,ms
+propagation each), path B (two 200\,Mbit/s links, 5\,ms each) and path C (three
+50\,Mbit/s links, 2\,ms each). By default URLLC uses A, eMBB uses B and mMTC uses C.
+Nominal demand is 2, 80 and 2\,Mbit/s for URLLC, eMBB and mMTC, with 5\,\% noise.
+
+Every second (one control slot), the controller chooses for each slice a path, a
+rate budget enforced by a meter at the ingress switch, and an admission limit, and it
+may switch the three links of path C off. The intents require each slice's 99th
+percentile latency to stay at or below 1\,ms (URLLC), 40\,ms (eMBB) and 20\,ms
+(mMTC) over the next ten slots. All thresholds are illustrative values for a
+scaled-down emulation, not 6G requirements.
+
+Six scenarios of 60 slots (Table~\ref{tab:scenarios}) were defined from the topology
+before any results existed. Each targets one assumption: s2 and s3 the capacity and
+latency reasoning, s4 the validity of measurements, s5 the correctness of the model,
+and s6 the timing of actions; s1 is the control case.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  sw/.style={circle,draw,thick,minimum size=7mm,inner sep=0pt,font=\footnotesize},
+  lk/.style={thick},
+  lbl/.style={font=\scriptsize,fill=white,inner sep=1pt}]
+\node[sw] (s1) at (0,0) {$s_1$};
+\node[sw] (s2) at (3,1.3) {$s_2$};
+\node[sw] (s3) at (3,0) {$s_3$};
+\node[sw] (s4) at (1.8,-1.3) {$s_4$};
+\node[sw] (s6) at (4.2,-1.3) {$s_6$};
+\node[sw] (s5) at (6,0) {$s_5$};
+\draw[lk,red!70!black] (s1) -- node[lbl,above left]{50, 0.1} (s2);
+\draw[lk,red!70!black] (s2) -- node[lbl,above right]{50, 0.1} (s5);
+\draw[lk,blue!70!black] (s1) -- node[lbl]{200, 5} (s3);
+\draw[lk,blue!70!black] (s3) -- node[lbl]{200, 5} (s5);
+\draw[lk,green!45!black,dashed] (s1) -- node[lbl,below left]{50, 2} (s4);
+\draw[lk,green!45!black,dashed] (s4) -- node[lbl,below]{50, 2} (s6);
+\draw[lk,green!45!black,dashed] (s6) -- node[lbl,below right]{50, 2} (s5);
+\node[font=\scriptsize,left=1mm of s1] {ingress};
+\node[font=\scriptsize,right=1mm of s5] {egress};
+\node[font=\scriptsize,red!70!black] at (3,1.95) {path A (URLLC)};
+\node[font=\scriptsize,blue!70!black] at (3,0.45) {path B (eMBB)};
+\node[font=\scriptsize,green!45!black] at (3,-1.85) {path C (mMTC; links switchable)};
+\end{tikzpicture}
+\caption{Evaluation topology. Labels give link capacity (Mbit/s) and propagation
+delay (ms). Path C's links can be powered off by the controller.}
+\label{fig:topology}
+\end{figure}
+
+\begin{table}[t]
+\caption{Scenarios (60 one-second slots each)}
+\label{tab:scenarios}
+\centering
+\footnotesize
+\begin{tabular}{@{}lp{6.2cm}@{}}
+\toprule
+s1 & No disturbance (control case). \\
+s2 & 120\,Mbit/s of unmanaged traffic on path B, slots 20--40. \\
+s3 & 35\,Mbit/s of unmanaged traffic on path A, slots 20--40. \\
+s4 & eMBB demand $+50\,\%$ (15--35); telemetry frozen (20--30); background counters missing (40--45). \\
+s5 & Model mismatch: true URLLC packets 1500\,B and mMTC 500\,B where the model assumes 64\,B and 100\,B; 20\,\% latency noise. \\
+s6 & The s2 surge, plus a one-slot actuation delay throughout and a controller outage (45--50). \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{System Model}
+\label{sec:system}
+
+Time is slotted, $t \in \{0,1,\dots\}$, with slot length $\Delta t = 1$\,s.
+Table~\ref{tab:notation} summarizes the notation.
+
+\emph{State and demand.} The state $s_t$ is a set of 45 named, timestamped
+measurements: per link the utilization and the background load (traffic outside the
+managed slices); per slice the p99 latency, jitter, loss, throughput, queue occupancy
+and active users; per switch the flow-table occupancy; and an energy proxy. Each
+measurement carries the time it was taken, so stale values can be detected; missing
+values stay missing. The exogenous input $d_t$ contains each slice's offered load
+and number of active devices.
+
+\emph{Action.} An action $a_t$ assigns to each slice $i \in \{\text{URLLC},
+\text{eMBB}, \text{mMTC}\}$ a path $p_i$ from its allowed set, a rate budget $b_i$
+within configured bounds (e.g.\ $b_{\mathrm{eMBB}} \in [1,150]$\,Mbit/s) and an
+admission limit $n_i$, and sets an on/off state for each link of path C. The bounded
+set of such actions is $\Acal$. All rates in the system, including budgets,
+capacities and measurements, are Ethernet frame rates, which is what switch counters
+and meters count.
+
+\emph{Network.} The true transition $s_{t+1} = T(s_t, a_t, d_t, \varepsilon_t)$ is
+unknown to the controller. In our experiments it is realized by one of two
+evaluation environments, neither of which the controller models:
+\begin{itemize}
+\item a \emph{simulator} that computes per-slot ground truth from its own parameters
+(true packet sizes, latency noise, overload with a 50\,ms buffer, scheduled
+background, telemetry faults, actuation delays); and
+\item an \emph{emulated network} on Mininet \cite{lantz2010mininet} with Open vSwitch
+\cite{pfaff2015ovs}, programmed with OpenFlow~1.3 rules and meters
+\cite{openflow13spec}, with shaped links, iperf3 traffic, 100 ping probes per slot
+for latency, and switch counters for throughput and background load. It runs in real
+time on one machine (Ubuntu 24.04 under WSL2, Mininet 2.3.0, Open vSwitch 3.3.9),
+and its values are measurements, not ground truth.
+\end{itemize}
+
+\begin{table}[t]
+\caption{Notation}
+\label{tab:notation}
+\centering
+\footnotesize
+\begin{tabular}{@{}lp{6.1cm}@{}}
+\toprule
+$s_t, d_t$ & measured state and demand at slot $t$ \\
+$a_t \in \Acal$ & applied action; $\Acal$ the bounded action set \\
+$p_i, b_i, n_i$ & path, rate budget, admission limit of slice $i$ \\
+$T$ & true (unknown) transition: simulator or emulated network \\
+$\That$ & nominal model used by the shield \\
+$\dbar$ & demand forecast, $1.2\,d_t$ \\
+$\pi_0$ & fallback policy \\
+$\Ccal_t, \Ccal^\star_t$ & candidate set and its certified subset \\
+$c(s,a)$ & hard-constraint vector, satisfied when $\le 0$ \\
+$\varphi \in \Phi$ & STL intents; $\rho_\varphi$ local robustness \\
+$H, \rhomin$ & rollout horizon (10 slots), robustness margin (0.05) \\
+$V$ & shield: $V(s_t,d_t,a)\in\{0,1\}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Mathematical Formulation}
+\label{sec:formulation}
+
+This section states what the prototype computes. Bracketed equation numbers, e.g.\
+[Eq.~17], refer to the course formulation \cite{vgcp_formulation}; where the
+prototype interprets or replaces part of it, we say so. The formulation is
+expressed in terms of a nominal model $\That$, which is \emph{not} the true
+transition $T$: every quantity below with a hat is a prediction.
+
+\subsection{Intents and robustness}
+An intent is an STL formula over predicates $p(s,a)$. The prototype supports
+single-signal predicates $x \le c$ and $x \ge c$ with value
+\begin{equation}
+p(s,a) = \frac{c - x(s,a)}{\sigma_x} \quad\text{or}\quad \frac{x(s,a) - c}{\sigma_x},
+\label{eq:pred}
+\end{equation}
+where $\sigma_x$ is a declared scale for the signal's family (1\,ms for latency).
+With $\sigma_x = 1$ this is [Eq.~6]; the scale makes robustness unitless, so one
+margin $\rhomin$ can apply to intents with different units. Robustness follows the
+standard quantitative semantics \cite{donze2010robust} [Eqs.~8--11]:
+$\rho^{p}(\mathbf{s},\mathbf{a},t) = p(s_t,a_t)$,
+$\rho^{\neg\varphi} = -\rho^{\varphi}$,
+$\rho^{\varphi_1\wedge\varphi_2} = \min(\rho^{\varphi_1},\rho^{\varphi_2})$ and
+\begin{equation}
+\rho^{\varphi_1 \stlU_{[a,b]} \varphi_2}(t) =
+\max_{\tau\in[t+a,t+b]} \min\Bigl(\rho^{\varphi_2}(\tau), \min_{u\in[t,\tau]} \rho^{\varphi_1}(u)\Bigr),
+\end{equation}
+with $\stlG_{[a,b]}\varphi = \neg(\top \stlU_{[a,b]} \neg\varphi)$ and time in
+slots. The configured intents are
+\begin{equation}
+\varphi_i = \stlG_{[1,10]}\bigl(\text{latency}^{\mathrm{p99}}_i \le L_i\bigr),\quad
+L = (1, 40, 20)\,\text{ms}.
+\label{eq:intents}
+\end{equation}
+A missing sample makes the robustness unknown, which the shield treats as failure.
+
+\subsection{Hard constraints}
+The constraint vector $c(s,a)$ [Eq.~16] is satisfied when every component is
+$\le 0$. For each link $\ell$ with capacity $C_\ell$,
+\begin{equation}
+c^{\mathrm{cap}}_\ell(s,a) = (1+\epsilon)\!\!\sum_{i:\,\ell \in p_i}\! b_i
+ + B_\ell(s) - f_{\max} C_\ell ,
+\label{eq:cap}
+\end{equation}
+where $B_\ell(s)$ is the measured background load, $f_{\max} = 0.9$ is the
+reservation limit, and $\epsilon = 0.01$ accounts for a measured property of the
+switch meters (Section~\ref{sec:meter}). Including $B_\ell$ is our reading of the
+formulation's ``physical link capacities'': without it, traffic outside the managed
+slices is invisible to the shield. The remaining components bound flow-table
+occupancy (current occupancy plus two rules per slice routed through a switch, at
+most 1000), enforce minimum budgets, and require each route to be an allowed,
+loop-free ingress-to-egress path over powered-on links (0 if valid, 1 otherwise).
+
+\subsection{Nominal model and projected rollout}
+The formulation's learned world model $W_\psi$ [Eq.~22] is replaced by an analytic
+model $\That$. With admitted fraction $f_i = \min(1, n_i/\text{devices}_i)$, the
+predicted slice load is $x_i = \min\bigl(f_i\,\dbar_i,\,(1+\epsilon) b_i\bigr)$, the
+link utilization is $u_\ell = (\sum_{i:\,\ell\in p_i} x_i + B_\ell)/C_\ell$, and the
+predicted p99 latency of slice $i$ is
+\begin{equation}
+\hat{L}_i = k \sum_{\ell \in p_i} \Bigl( \delta_\ell + \delta_{\mathrm{proc}}
+ + \ln(100)\, \frac{S_\ell}{1-u_\ell} \Bigr),
+\label{eq:latency}
+\end{equation}
+where $\delta_\ell$ is the propagation delay, $\delta_{\mathrm{proc}} = 0.05$\,ms,
+$S_\ell$ is the serialization time of the largest frame on $\ell$, and
+$\ln(100)\,S/(1-u)$ is the 99th percentile of the M/M/1 sojourn time
+\cite{kleinrock1975queueing}. Summing per-hop percentiles is a heuristic, not a
+bound, and $k = 1.5$ is a safety factor that was set, not fitted. The model is valid
+only while every $u_\ell \le 0.95$; outside that range its prediction is flagged.
+
+Demand is forecast as a constant upper bound $\dbar_{t+k} = 1.2\, d_t$, and
+background load is carried forward unchanged. Following [Eqs.~12--13], a candidate
+$a$ is rolled forward for $H = 10$ steps:
+\begin{equation}
+\begin{aligned}
+&\shat_t = s_t,\qquad \ahat_t = a,\\
+&\shat_{t+k+1} = \That(\shat_{t+k}, \ahat_{t+k}, \dbar_{t+k}),\;\; k=0,\dots,H-1,\\
+&\ahat_{t+k} = \pi_0(\shat_{t+k}),\;\; k\ge 1.
+\end{aligned}
+\label{eq:rollout}
+\end{equation}
+
+\subsection{Certification}
+The local robustness of $a$ for intent $\varphi$ is its robustness on the projected
+trajectory, $\rho_\varphi(s_t,a) = \rho^{\varphi}(\shat_{t:t+H}, \ahat_{t:t+H}, t)$
+[Eq.~14]. The shield certifies $a$, $V(s_t,d_t,a) = 1$, if and only if
+\begin{equation}
+\begin{aligned}
+& a \in \Acal \;\text{ and every input in } s_t, d_t \text{ is present,}\\
+& \quad\text{finite, in range and fresh},\\
+& c(s_t,a) \le 0 \;\text{ and }\; c(\shat_{t+k},\ahat_{t+k}) \le 0,\;\; k=1,\dots,H,\\
+& \That \text{ in range and } \pi_0(\shat_{t+k}) \in \Acal \text{ at every step},\\
+& \rho_\varphi(s_t,a) \ge \rhomin = 0.05 \quad \forall \varphi \in \Phi .
+\end{aligned}
+\label{eq:certify}
+\end{equation}
+Compared with the formulation's intent-feasible set $\Acal_\Phi(s)$ [Eq.~17], the
+extra conditions in (\ref{eq:certify}) can only remove actions. Certification
+therefore implies membership in $\Acal_\Phi(s_t)$ \emph{as computed with $\That$,
+$\dbar$ and $\pi_0$}, which is the formulation's soundness property [Assumption~2]
+relative to the model. It implies nothing about $T$.
+
+Two interpretations are worth stating. First, (\ref{eq:intents}) uses
+$\stlG_{[1,10]}$ rather than $\stlG_{[0,10]}$. Because [Eq.~14] starts at the
+measured state, a violation already present at $t$ would make every action
+uncertifiable, including the fallback that would correct it; excusing only the
+measured slot still checks the candidate, whose effect first appears at $k=1$.
+Second, the uncertainty trigger $u_\psi > \eta$ [Def.~2] needs a learned model; its
+nearest Stage-1 analogue is the condition that $\That$ stays in its valid range.
+
+\subsection{Fallback policy}
+The fallback $\pi_0$ is separate from certification: it is what the applier installs
+when nothing is certified, and it is not certified by construction. It starts from a
+base action (URLLC on A, eMBB on B at 100\,Mbit/s, mMTC on C). If eMBB's path has
+room, i.e.\
+\begin{equation}
+\min_{\ell\in p_{\mathrm{eMBB}}}\Bigl(f_{\max}C_\ell - B_\ell
+ - (1+\epsilon)\!\!\sum_{i\neq \mathrm{eMBB}:\,\ell\in p_i}\!\! b_i\Bigr)
+\ge (1+\epsilon)\, b_{\mathrm{eMBB}},
+\label{eq:fbroom}
+\end{equation}
+it returns the base action; otherwise it moves eMBB to the allowed path with the most
+room and shrinks its budget to fit. If any background load is unknown, it returns the
+base action. The formulation assumes $\pi_0(s) \in \Acal_\Phi(s)$ for every
+reachable $s$ [Assumption~3]. We do not establish this; whenever $\pi_0$ is applied,
+we record whether the shield would have certified it.
+
+\subsection{Selection and closed loop}
+Let $\Ccal_t = (a^{(1)},\dots,a^{(K)})$ be the candidates in the generator's order
+and $\Ccal^\star_t = \{a\in\Ccal_t : V(s_t,d_t,a)=1\}$ the certified ones. Selection
+operates only on $\Ccal^\star_t$, so it cannot weaken certification. The
+\emph{first-certified} rule takes the first element of $\Ccal^\star_t$. The
+\emph{utility} rule implements [Eq.~42] with the deterministic $\That$, so the
+expectation reduces to one rollout:
+\begin{equation}
+\sigma(s_t) = \arg\max_{a\in\Ccal^\star_t} \sum_{k=0}^{H}
+\gamma^k\, U(\shat_{t+k}, \ahat_{t+k}),\quad \gamma = 0.9,
+\label{eq:select}
+\end{equation}
+\begin{equation}
+U(s,a) = \alpha_1 \frac{\sum_i \mathrm{thr}_i(s)}{100} - \alpha_2 \frac{E(s)}{10}
+ + \alpha_3 \min_{p} p(s,a) - \alpha_4 \frac{\sum_i b_i}{100},
+\label{eq:utility}
+\end{equation}
+with $(\alpha_1,\alpha_2,\alpha_3,\alpha_4) = (1, 0.1, 1, 0.5)$, $E$ the energy
+proxy, and the minimum over all intent predicates [Eq.~27]. The weights are
+illustrative and were not tuned. The applied action and the closed loop are
+\begin{equation}
+\begin{gathered}
+a_t = \begin{cases} \text{selected } a\in\Ccal^\star_t, & \Ccal^\star_t \neq \emptyset,\\
+\pi_0(s_t), & \text{otherwise}, \end{cases}\\
+s_{t+1} = T(s_t, a_t, d_t, \varepsilon_t).
+\end{gathered}
+\label{eq:closed}
+\end{equation}
+The certificate concerns $\That$; the outcome in (\ref{eq:closed}) is produced by
+$T$. The experiments measure the gap between the two.
+
+% =====================================================================
+\section{Methodology: The Shielded Control Loop}
+\label{sec:method}
+
+Each slot runs the same ten steps (Fig.~\ref{fig:loop}, Algorithm~\ref{alg:loop}):
+(1)~observe telemetry; (2)~generate candidates; (3)~predict each candidate's
+consequences with $\That$ and $\pi_0$; (4)~evaluate the hard constraints and the
+STL intents on the prediction; (5)~compute robustness; (6)~certify the candidates
+that pass; (7)~select one certified candidate; (8)~apply it through the certified
+path, or the fallback if none passed; (9)~observe the resulting state in the next
+slot; (10)~repeat. Keeping these steps separate is what lets the evaluation
+attribute a violation to the generator, the model or the fallback.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw,rounded corners=2pt,thick,align=center,font=\footnotesize,minimum height=7mm,inner sep=3pt},
+  arr/.style={-{Stealth[length=2mm]},thick},
+  note/.style={font=\scriptsize,align=center}]
+\node[box,fill=gray!8] (net) at (0,0) {Network ($T$)\\ simulator / Mininet};
+\node[box] (gen) at (0,-1.45) {Candidate generator\\ 5 heuristics + 4 random};
+\node[box,fill=blue!6] (sh) at (4.4,-1.45) {Verification shield $V$\\ rollout with $\That$, $\dbar$, $\pi_0$\\ $c\le0$, $\rho\ge\rhomin$};
+\node[box] (sel) at (4.4,-3.2) {Selection $\sigma$\\ first-certified / Eq.~(\ref{eq:select})};
+\node[box,fill=green!8] (app) at (0,-3.2) {Certified applier\\ checks certificate\\ else applies $\pi_0(s_t)$};
+\draw[arr] (net) -- node[note,left]{$s_t,d_t$} (gen);
+\draw[arr] (gen) -- node[note,above]{$\Ccal_t$, $K=9$} (sh);
+\draw[arr] (sh) -- node[note,right]{$\Ccal^\star_t$ + certificates} (sel);
+\draw[arr] (sel) -- node[note,above]{$a$ + certificate} (app);
+\draw[arr] (app.west) -- ++(-0.55,0) |- node[note,pos=0.25,left]{$a_t$} (net.west);
+\draw[arr,dashed] (net.east) -| node[note,pos=0.25,above]{$s_t, d_t$} (sh.north);
+\end{tikzpicture}
+\caption{One control slot. Only the applier can change the network on the shielded
+path, and it accepts an action only with a certificate issued for exactly that action
+and observation.}
+\label{fig:loop}
+\end{figure}
+
+\subsection{Candidate generation (stand-in for the generative policy)}
+The formulation's generative policy $G_\theta$ [Eq.~21] is not implemented. A
+heuristic generator proposes nine candidates per slot in a fixed order of
+preference: \emph{greedy-embb} (eMBB budget at its maximum, 150\,Mbit/s),
+\emph{demand-matched} (each budget $1.25\times$ the measured offered load),
+\emph{capacity-fitted} (eMBB on the path with the most reservable room, budget
+shrunk to fit), \emph{least-loaded-embb}, \emph{shortest-delay} (all slices on path
+A), and four seeded random actions drawn uniformly from $\Acal$. The greedy
+candidate comes first on purpose: it represents an aggressive generator, and the
+random ones stand in for hallucinated proposals. Every candidate lies in $\Acal$, so
+rejections come from predicted consequences, not from malformed actions. Missing
+measurements are never read as zero: unknown demand keeps the fallback's budget, and a
+link with unknown background is treated as full.
+
+\subsection{Verification and certificates}
+Algorithm~\ref{alg:shield} implements (\ref{eq:rollout})--(\ref{eq:certify}). Its
+result is a certificate that lists every check with status pass, fail or unknown,
+the robustness per intent, the constraint values, and fingerprints of the action,
+state and demand it was issued for. An exception inside the shield yields an
+unknown check, never acceptance.
+
+\begin{algorithm}[t]
+\caption{Verification shield $V(s_t, d_t, a)$}
+\label{alg:shield}
+\footnotesize
+\begin{algorithmic}[1]
+\State check $a\in\Acal$; check every input in $s_t,d_t$ is present, finite, in range and at most 2\,s old
+\If{a check failed} \Return reject; mark remaining checks \emph{unknown} \EndIf
+\State evaluate $c(s_t,a)$
+\State $\dbar \gets 1.2\, d_t$; $\shat_t\gets s_t$; $\ahat_t\gets a$
+\For{$k = 0,\dots,H-1$}
+  \State $\shat_{t+k+1} \gets \That(\shat_{t+k},\ahat_{t+k},\dbar)$; record whether in range
+  \State $\ahat_{t+k+1} \gets \pi_0(\shat_{t+k+1})$; check $\ahat_{t+k+1}\in\Acal$
+\EndFor
+\State evaluate $c(\shat_{t+k},\ahat_{t+k})$ for $k=1,\dots,H$
+\If{$\That$ out of range or fallback invalid} \Return reject; intents \emph{unknown} \EndIf
+\For{each $\varphi\in\Phi$} compute $\rho_\varphi$ on $(\shat,\ahat)_{t:t+H}$ \EndFor
+\State \Return certificate: accept iff all checks pass and $\rho_\varphi\ge\rhomin\ \forall\varphi$; bind $a$, $s_t$, $d_t$, time
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Selection and enforced application}
+The applier is the only code path from a shielded controller to the network. It
+refuses an action unless the certificate accepted exactly that action, was issued
+for the same state and demand (by fingerprint), and is no older than a configured
+limit. The one exception is the fallback: when nothing is certified, the applier
+computes $\pi_0(s_t)$ itself, so no caller can pass another action off as the
+fallback. The controller also asks the shield whether $\pi_0(s_t)$ would be
+certified and records the answer; an \emph{uncertified fallback} is a slot in which
+Assumption~3 failed.
+
+\begin{algorithm}[t]
+\caption{One slot of the shielded controller}
+\label{alg:loop}
+\footnotesize
+\begin{algorithmic}[1]
+\State observe $(s_t, d_t)$ \Comment{step 1}
+\State $\Ccal_t \gets$ generator$(s_t,d_t)$ \Comment{step 2}
+\State $\Ccal^\star_t \gets \{(a,\kappa) : \kappa \gets V(s_t,d_t,a),\ \kappa \text{ accepts}\}$ \Comment{steps 3--6}
+\If{$\Ccal^\star_t\neq\emptyset$}
+  \State $(a,\kappa) \gets$ first of $\Ccal^\star_t$, or $\sigma(s_t)$ of (\ref{eq:select}) \Comment{step 7}
+  \State applier.apply\_certified$(a,\kappa,s_t,d_t)$ \Comment{step 8; refuses on mismatch}
+\Else
+  \State record $V(s_t,d_t,\pi_0(s_t))$; applier.apply\_fallback$(s_t)$ \Comment{step 8}
+\EndIf
+\State network advances one slot; outcome measured at $t+1$ \Comment{steps 9--10}
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Model calibration}
+To test whether the model's error is a scale error, a calibration tool computes, for
+every recorded slot and slice, the ratio $r$ of recorded latency to the prediction of
+(\ref{eq:latency}) with $k=1$, using that slot's own action, load and background. The
+proposed factor is the 0.99-quantile of $r$ on training runs; its coverage, the
+fraction of points with $k\hat{L}\ge L$, is then measured on runs it was not fitted
+on. The adoption rule was fixed before fitting: a new factor replaces 1.5 only if it
+reaches 99\,\% coverage on held-out seeds of the emulated network. A fit on the
+simulator is reported but not adopted, since it would tune the shield to its own
+evaluator.
+
+\subsection{Implementation}
+The prototype is about 6000 lines of Python 3.12, configured in YAML. Its 514 unit
+tests include a check of the robustness computation against a direct implementation
+of the recursive definitions [Eqs.~8--11], and a check of the shield against a
+literal implementation of [Eq.~17] on a grid of 648 actions. Eleven further tests
+run on the emulated network as root (meter policing, background accounting, reroute
+timing, probe latency, counter freshness, frame-rate accounting, resource cleanup).
+A dashboard runs the same loop slot by slot (Fig.~\ref{fig:dashboard}).
+
+% =====================================================================
+\section{Baseline Algorithms}
+\label{sec:baselines}
+
+All controllers receive the same nine candidates in the same order and act on the
+same telemetry; they differ only in what they do with the candidates. This isolates
+the effect of verification from the quality of the proposals.
+
+\begin{itemize}
+\item \textbf{shielded}: the proposed loop with first-certified selection.
+\item \textbf{shielded-utility}: the proposed loop with utility selection
+(\ref{eq:select}); comparing the two isolates the selection rule.
+\item \textbf{unshielded}: applies greedy-embb, the generator's first choice, without
+verification. Against \emph{shielded} it tests H1.
+\item \textbf{unshielded-fitted}: applies the capacity-fitted candidate without
+verification. It is a strong conventional heuristic and tests whether the shield
+adds anything beyond a good hand-written rule.
+\item \textbf{fallback-only}: always applies $\pi_0(s_t)$; it tests whether
+candidates add anything beyond the fallback.
+\end{itemize}
+
+The unshielded baselines also run the shield in \emph{shadow mode}, without effect on
+their action, to count applied actions the shield would have rejected. For H3, the
+shielded and baseline controllers are repeated with a static fallback that always
+restores the base action.
+
+% =====================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+
+\emph{Simulation.} Every scenario in Table~\ref{tab:scenarios} was run with every
+controller for seeds 1--5 (main campaign) and seeds 6--10 (held-out). The calibration
+ablation repeats the held-out runs with the simulator-fitted factor $k = 1.109$ for
+the controllers that use the shield, and the fallback ablation repeats seeds 1--5
+with the static fallback. All simulation runs were made with the same code version
+as the emulated s2 run below.
+
+\emph{Emulated network.} Mininet campaigns covered s1--s3, the scenarios the
+emulation supports without changes, with all five controllers in real time. We
+report s2 for seeds 1--5 with the final implementation, and use an earlier s1--s3
+campaign (seeds 1--5, before the meter correction) only for calibration and for the
+latency issue in Section~\ref{sec:results}. Each campaign ran only after the eleven
+root-only tests had passed twice in a row.
+
+\emph{Metrics.} Outcomes are taken from the slot after each decision:
+\emph{violation slots}, in which a link was overloaded (offered load above capacity)
+or a slice's p99 latency exceeded its bound; \emph{reservation-limit slots}, with a
+link above $0.9$ of capacity; \emph{fallback slots} and \emph{uncertified
+fallbacks}; \emph{shadow rejections}; the \emph{candidate rejection rate};
+\emph{reserved bandwidth} (sum of applied budgets); delivered eMBB throughput; and
+verification time per slot. On the emulated network, overload cannot be observed
+because shaped links never carry more than their capacity, and latency is the 99th
+percentile of 100 probes. Values are mean $\pm$ standard deviation over seeds.
+
+\input{results}
+
+% =====================================================================
+\section{Limitations}
+\label{sec:limits}
+
+\begin{itemize}
+\item \emph{No learned components.} The generator is heuristic and the model
+analytic. The results say nothing about how often a learned generator's proposals
+would be certified, or about the formulation's learned world model and its
+uncertainty trigger.
+\item \emph{Certification is relative to the model.} A certificate implies
+feasibility only under $\That$, the forecast, $\pi_0$ and the configured
+constraints; in s5 it was wrong in every slot.
+\item \emph{The fallback is not guaranteed.} Recursive feasibility of $\pi_0$
+(Assumption~3) is not established, and uncertified fallbacks occurred in s3 and s4.
+\item \emph{Evaluation environments are not the real network.} The simulator shares
+the shield's structural assumptions, and the emulated network runs on one machine.
+Neither is evidence of safety in a production network.
+\item \emph{Incomplete emulated evidence.} Only s2 has been run on the emulated
+network with the final implementation; the s1--s3 campaign predates the meter
+correction and shows latency spikes whose cause is unknown.
+\item \emph{Scale and statistics.} One topology, one demand mix, five seeds per
+campaign. Several cells have too few violations to rank controllers.
+\item \emph{Illustrative parameters.} Thresholds, scales and utility weights were
+chosen, not derived from requirements.
+\end{itemize}
+
+% =====================================================================
+\section{Conclusion}
+
+We asked whether predictive verification can keep candidate actions that violate
+configured constraints or latency intents off the certified control path, and when
+that protection fails. On the evaluated scenarios the answer has three parts.
+
+\emph{H1 is supported where the model is adequate.} Given identical candidates,
+routing them through the shield reduced violation slots under a background surge
+from 16.4 to 0.8 per run in simulation (and from 4.2 to 0.6 on the emulated
+network), because the shield rejected the greedy candidate in every surge slot, at
+22--33\,ms per one-second slot. It did not improve on a capacity-aware heuristic,
+which achieved the same outcomes without verification. What the certified path
+contributes is that the outcome no longer depends on which candidate the generator
+ranks first.
+
+\emph{H2 is supported.} When the network differed structurally from the model, the
+shield certified actions that violated the URLLC intent in all 60 slots, and a
+recalibrated scale factor covered only 40\,\% of that scenario's points. Calibration
+helped where the model's error was one of scale (it removed all 20 unnecessary
+fallbacks of s3), but not where its structure was wrong.
+
+\emph{H3 is supported.} Changing only the fallback, from capacity-aware to a fixed
+one that did not fit the surge, raised the shielded controller's violation slots from
+0.8 to 16.4 in s2 and from 1.6 to 16.4 in s6, the unshielded level: no rollout
+continued by that fallback could be certified. The capacity-aware fallback is what made verification useful.
+
+The prototype therefore demonstrates a certified path whose safety is a property of
+the model and the fallback rather than of the generator. It does not demonstrate
+safety on a real network, recursive feasibility of the fallback, or an advantage over
+well-designed conventional control. The next steps follow from these results:
+explain the remaining latency spikes on the emulated network and complete its
+campaign, give the model uncertainty estimates that can trigger the fallback, for
+example by conformal prediction \cite{angelopoulos2023conformal}, and only then
+connect a learned generator to the same interface.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
